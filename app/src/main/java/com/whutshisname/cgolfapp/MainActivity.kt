@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,7 +25,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
@@ -193,12 +193,13 @@ private fun SelectTab(uiState: UiState, viewModel: MainViewModel) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp)
+        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)
     ) {
-        Spacer(Modifier.height(8.dp))
-
-        LazyColumn(modifier = Modifier.weight(1f)) {
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             grouped.forEach { (cgid, clubs) ->
                 item(key = cgid) {
                     ClubCategoryGroup(
@@ -208,10 +209,6 @@ private fun SelectTab(uiState: UiState, viewModel: MainViewModel) {
                         onToggle = viewModel::toggleSelection,
                         onSelectAll = { selectAll -> viewModel.selectAllInCategory(cgid, selectAll) },
                         onToggleFavorite = viewModel::toggleFavorite
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 2.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant
                     )
                 }
             }
