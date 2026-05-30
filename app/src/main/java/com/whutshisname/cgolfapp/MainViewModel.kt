@@ -48,7 +48,8 @@ data class UiState(
     val fetchedResults: List<FetchedResult> = emptyList(),
     val variantRows: List<VariantRow> = emptyList(),
     val filteredRows: List<VariantRow> = emptyList(),
-    val filters: VariantFilters = VariantFilters()
+    val filters: VariantFilters = VariantFilters(),
+    val jsonExpanded: Boolean = false
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -137,6 +138,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { state ->
             state.copy(filters = VariantFilters(), filteredRows = state.variantRows)
         }
+    }
+
+    fun toggleJsonExpanded() {
+        _uiState.update { it.copy(jsonExpanded = !it.jsonExpanded) }
     }
 
     private suspend fun fetchOneSuspend(pid: String, cgid: String): String =

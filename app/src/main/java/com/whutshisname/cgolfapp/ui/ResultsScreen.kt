@@ -36,8 +36,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.whutshisname.cgolfapp.UiState
+import com.whutshisname.cgolfapp.FetchedResult
 import com.whutshisname.cgolfapp.MainViewModel
+import com.whutshisname.cgolfapp.UiState
 import com.whutshisname.cgolfapp.model.VariantRow
 
 private val W_PRODUCT   = 130.dp
@@ -116,11 +117,23 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
         HorizontalDivider()
 
         // Data rows
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(modifier = Modifier.weight(1f)) {
             items(uiState.filteredRows, key = { it.id }) { row ->
                 TableRow(row, hScroll)
                 HorizontalDivider()
             }
+        }
+
+        // Raw JSON viewer — collapsed by default, shown below the table
+        if (uiState.fetchedResults.isNotEmpty()) {
+            val jsonContent = uiState.fetchedResults.joinToString("\n\n") { result ->
+                "=== ${result.club.displayValue} ===\n${result.rawJson.substringAfter("\n\n")}"
+            }
+            JsonViewerSection(
+                content = jsonContent,
+                expanded = uiState.jsonExpanded,
+                onToggle = viewModel::toggleJsonExpanded
+            )
         }
     }
 }
