@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.whutshisname.cgolfapp.MainViewModel
+import com.whutshisname.cgolfapp.SortOrder
 import com.whutshisname.cgolfapp.UiState
 import com.whutshisname.cgolfapp.VariantFilters
 import com.whutshisname.cgolfapp.model.VariantRow
@@ -112,7 +113,7 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
 
     Column(modifier = Modifier.fillMaxSize()) {
 
-        // ── Filter header: label + active count + Clear All ──────────────────
+        // ── Controls row: filter label + sort + clear ────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -127,6 +128,10 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
                 color = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f)
+            )
+            SortDropdown(
+                current = uiState.sortOrder,
+                onSelect = viewModel::setSortOrder
             )
             if (filters.isActive) {
                 TextButton(
@@ -346,6 +351,41 @@ private fun PriceCell(price: String, url: String?, width: Dp, onTap: (String) ->
             .padding(horizontal = 6.dp)
             .then(if (hasLink) Modifier.clickable { onTap(url!!) } else Modifier)
     )
+}
+
+@Composable
+private fun SortDropdown(current: SortOrder, onSelect: (SortOrder) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val isActive = current != SortOrder.NONE
+    Box {
+        TextButton(
+            onClick = { expanded = true },
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = if (isActive) "Sort: ${current.label}" else "Sort",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (isActive) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            SortOrder.entries.forEach { order ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = order.label,
+                            fontWeight = if (order == current) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (order == current) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface
+                        )
+                    },
+                    onClick = { onSelect(order); expanded = false }
+                )
+            }
+        }
+    }
 }
 
 @Composable

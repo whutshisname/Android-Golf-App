@@ -176,6 +176,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setSortOrder(order: SortOrder) {
+        _uiState.update { state ->
+            state.copy(
+                sortOrder = order,
+                filteredRows = applyFiltersAndSort(state.variantRows, state.filters, order, state.searchQuery)
+            )
+        }
+    }
+
     fun clearFilters() {
         _uiState.update { state ->
             state.copy(
