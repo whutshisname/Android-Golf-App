@@ -8,14 +8,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -32,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -41,45 +45,79 @@ import com.whutshisname.cgolfapp.MainViewModel
 import com.whutshisname.cgolfapp.UiState
 import com.whutshisname.cgolfapp.model.VariantRow
 
-private val W_PRODUCT   = 130.dp
-private val W_CLUB_SET  =  80.dp
-private val W_CLUB      =  60.dp
-private val W_LOFT      =  50.dp
-private val W_SHAFT     = 130.dp
-private val W_FLEX      =  60.dp
-private val W_PRICE     =  75.dp
+private val W_PRODUCT  = 130.dp
+private val W_CLUB_SET =  80.dp
+private val W_CLUB     =  60.dp
+private val W_LOFT     =  50.dp
+private val W_SHAFT    = 130.dp
+private val W_FLEX     =  60.dp
+private val W_PRICE    =  75.dp
 
 @Composable
 fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
+    // Loading state — shown while fetch is in progress (auto-switched here before rows arrive)
     if (uiState.variantRows.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No results yet — select clubs and tap Fetch.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (uiState.isLoading) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        text = uiState.fetchProgress.ifEmpty { "Fetching club data…" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                // Empty state — no fetch run yet
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Text(text = "⛳", style = MaterialTheme.typography.displayMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "No Results Yet",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Select clubs on the Select tab and tap Fetch to see live pricing and availability.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
         }
         return
     }
 
     val rows = uiState.variantRows
-    val clubSetOpts  = remember(rows) { rows.map { it.clubSet  }.filter { it.isNotBlank() }.distinct().sorted() }
-    val clubOpts     = remember(rows) { rows.map { it.club     }.filter { it.isNotBlank() }.distinct().sorted() }
-    val loftOpts     = remember(rows) { rows.map { it.loft     }.filter { it.isNotBlank() }.distinct().sortedWith(compareBy { it.trimEnd('°').toDoubleOrNull() ?: 0.0 }) }
-    val shaftOpts    = remember(rows) { rows.map { it.shaftType}.filter { it.isNotBlank() }.distinct().sorted() }
-    val flexOpts     = remember(rows) { rows.map { it.shaftFlex}.filter { it.isNotBlank() }.distinct().sorted() }
+    val clubSetOpts = remember(rows) { rows.map { it.clubSet  }.filter { it.isNotBlank() }.distinct().sorted() }
+    val clubOpts    = remember(rows) { rows.map { it.club     }.filter { it.isNotBlank() }.distinct().sorted() }
+    val loftOpts    = remember(rows) { rows.map { it.loft     }.filter { it.isNotBlank() }.distinct()
+        .sortedWith(compareBy { it.trimEnd('°').toDoubleOrNull() ?: 0.0 }) }
+    val shaftOpts   = remember(rows) { rows.map { it.shaftType}.filter { it.isNotBlank() }.distinct().sorted() }
+    val flexOpts    = remember(rows) { rows.map { it.shaftFlex}.filter { it.isNotBlank() }.distinct().sorted() }
 
     val hScroll = rememberScrollState()
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Filter chips
         LazyRow(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item { FilterDropdown("Club/Set",   clubSetOpts, uiState.filters.clubSet)  { viewModel.setFilter("clubSet",   it) } }
-            item { FilterDropdown("Club",       clubOpts,    uiState.filters.club)     { viewModel.setFilter("club",      it) } }
-            item { FilterDropdown("Loft",       loftOpts,    uiState.filters.loft)     { viewModel.setFilter("loft",      it) } }
-            item { FilterDropdown("Shaft Type", shaftOpts,   uiState.filters.shaftType){ viewModel.setFilter("shaftType", it) } }
-            item { FilterDropdown("Flex",       flexOpts,    uiState.filters.shaftFlex){ viewModel.setFilter("shaftFlex", it) } }
+            item { FilterDropdown("Club/Set",   clubSetOpts, uiState.filters.clubSet)   { viewModel.setFilter("clubSet",   it) } }
+            item { FilterDropdown("Club",       clubOpts,    uiState.filters.club)      { viewModel.setFilter("club",      it) } }
+            item { FilterDropdown("Loft",       loftOpts,    uiState.filters.loft)      { viewModel.setFilter("loft",      it) } }
+            item { FilterDropdown("Shaft Type", shaftOpts,   uiState.filters.shaftType) { viewModel.setFilter("shaftType", it) } }
+            item { FilterDropdown("Flex",       flexOpts,    uiState.filters.shaftFlex) { viewModel.setFilter("shaftFlex", it) } }
             if (uiState.filters.isActive) {
                 item {
                     TextButton(onClick = viewModel::clearFilters) { Text("Clear") }
@@ -99,8 +137,8 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(hScroll)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(vertical = 6.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                .padding(vertical = 8.dp)
         ) {
             HeaderCell("Product",    W_PRODUCT)
             HeaderCell("Club/Set",   W_CLUB_SET)
@@ -114,17 +152,40 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
             HeaderCell("Good",       W_PRICE)
             HeaderCell("Average",    W_PRICE)
         }
-        HorizontalDivider()
+        HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
 
-        // Data rows
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(uiState.filteredRows, key = { it.id }) { row ->
-                TableRow(row, hScroll)
-                HorizontalDivider()
+        // Filter empty state
+        if (uiState.filteredRows.isEmpty()) {
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Text(
+                        text = "No variants match the selected filters.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    TextButton(onClick = viewModel::clearFilters) {
+                        Text("Clear Filters")
+                    }
+                }
+            }
+        } else {
+            // Data rows — alternating row shading instead of dividers
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                itemsIndexed(uiState.filteredRows, key = { _, row -> row.id }) { index, row ->
+                    TableRow(row, hScroll, isEven = index % 2 == 0)
+                }
             }
         }
 
-        // Raw JSON viewer — collapsed by default, shown below the table
+        // Raw JSON viewer — collapsed by default
         if (uiState.fetchedResults.isNotEmpty()) {
             val jsonContent = uiState.fetchedResults.joinToString("\n\n") { result ->
                 "=== ${result.club.displayValue} ===\n${result.rawJson.substringAfter("\n\n")}"
@@ -139,13 +200,16 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
 }
 
 @Composable
-private fun TableRow(row: VariantRow, hScroll: ScrollState) {
+private fun TableRow(row: VariantRow, hScroll: ScrollState, isEven: Boolean) {
     val uriHandler = LocalUriHandler.current
+    val bgColor = if (isEven) MaterialTheme.colorScheme.surface
+                  else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .background(bgColor)
             .horizontalScroll(hScroll)
-            .padding(vertical = 4.dp)
+            .padding(vertical = 6.dp)
     ) {
         DataCell(row.productName, W_PRODUCT)
         DataCell(row.clubSet,     W_CLUB_SET)
@@ -167,9 +231,10 @@ private fun HeaderCell(text: String, width: Dp) {
         text = text,
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onPrimaryContainer,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.width(width).padding(horizontal = 4.dp)
+        modifier = Modifier.width(width).padding(horizontal = 6.dp)
     )
 }
 
@@ -180,7 +245,7 @@ private fun DataCell(text: String, width: Dp) {
         style = MaterialTheme.typography.bodySmall,
         maxLines = 2,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.width(width).padding(horizontal = 4.dp)
+        modifier = Modifier.width(width).padding(horizontal = 6.dp)
     )
 }
 
@@ -192,12 +257,13 @@ private fun PriceCell(price: String, url: String?, width: Dp, onTap: (String) ->
         style = MaterialTheme.typography.bodySmall.copy(
             color = if (hasLink) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
-            textDecoration = if (hasLink) TextDecoration.Underline else TextDecoration.None
+            textDecoration = if (hasLink) TextDecoration.Underline else TextDecoration.None,
+            fontWeight = if (hasLink) FontWeight.Medium else FontWeight.Normal
         ),
         maxLines = 1,
         modifier = Modifier
             .width(width)
-            .padding(horizontal = 4.dp)
+            .padding(horizontal = 6.dp)
             .then(if (hasLink) Modifier.clickable { onTap(url!!) } else Modifier)
     )
 }
@@ -214,8 +280,12 @@ private fun FilterDropdown(
         FilterChip(
             selected = selected != null,
             onClick = { expanded = true },
-            label = { Text(if (selected != null) "$label: $selected" else label,
-                          style = MaterialTheme.typography.labelSmall) }
+            label = {
+                Text(
+                    if (selected != null) "$label: $selected" else label,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(

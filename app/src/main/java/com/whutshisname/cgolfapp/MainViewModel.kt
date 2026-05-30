@@ -49,7 +49,8 @@ data class UiState(
     val variantRows: List<VariantRow> = emptyList(),
     val filteredRows: List<VariantRow> = emptyList(),
     val filters: VariantFilters = VariantFilters(),
-    val jsonExpanded: Boolean = false
+    val jsonExpanded: Boolean = false,
+    val errorMessage: String? = null
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -114,8 +115,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val raw = fetchOneSuspend(club.pid, club.cgid)
                 _uiState.update { it.copy(fetchedResults = it.fetchedResults + FetchedResult(club, raw)) }
             }
-            val rows = parseVariantRows(_uiState.value.fetchedResults)
-            _uiState.update { it.copy(isLoading = false, fetchProgress = "", variantRows = rows, filteredRows = rows) }
+            val results = _uiState.value.fetchedResults
+            val rows = parseVariantRows(results)
+            val errorMsg = buildErrorMessage(results, rows, selected.size)
+            _uiState.update { it.copy(isLoading = false, fetchProgress = "", variantRows = rows, filteredRows = rows, errorMessage = errorMsg) }
+        }
+    }
+
+    fun dismissError() {
+        _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    private fun buildErrorMessage(results: List<FetchedResult>, rows: List<VariantRow>, totalRequested: Int): String? {
+        val failures = results.count { r ->
+            !r.rawJson.startsWith("HTTP 200")
+        }
+        val firstFailRaw = results.firstOrNull { !it.rawJson.startsWith("HTTP 200") }?.rawJson ?: ""
+        return when {
+            failures == totalRequested -> when {
+                firstFailRaw.startsWith("HTTP 429") ->
+                    "Callaway is rate-limiting requests. Please wait a moment and try again."
+                firstFailRaw.startsWith("JS Error") || firstFailRaw.startsWith("Error:") ->
+                    "Network error. Please check your connection and try again."
+                else -> "Failed to retrieve club data. Please try again."
+            }
+            failures > 0 -> "$failures of $totalRequested clubs failed to load."
+            rows.isEmpty() -> "No variant data found for the selected clubs."
+            else -> null
         }
     }
 
