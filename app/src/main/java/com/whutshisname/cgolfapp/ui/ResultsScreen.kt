@@ -7,6 +7,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -40,9 +41,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.whutshisname.cgolfapp.FetchedResult
 import com.whutshisname.cgolfapp.MainViewModel
 import com.whutshisname.cgolfapp.UiState
+import com.whutshisname.cgolfapp.VariantFilters
 import com.whutshisname.cgolfapp.model.VariantRow
 
 private val W_PRODUCT  = 130.dp
@@ -55,7 +56,6 @@ private val W_PRICE    =  75.dp
 
 @Composable
 fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
-    // Loading state — shown while fetch is in progress (auto-switched here before rows arrive)
     if (uiState.variantRows.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (uiState.isLoading) {
@@ -72,7 +72,6 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
                     )
                 }
             } else {
-                // Empty state — no fetch run yet
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -106,33 +105,102 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
     val flexOpts    = remember(rows) { rows.map { it.shaftFlex}.filter { it.isNotBlank() }.distinct().sorted() }
 
     val hScroll = rememberScrollState()
+    val filters = uiState.filters
+    val activeFilterCount = listOfNotNull(
+        filters.clubSet, filters.club, filters.loft, filters.shaftType, filters.shaftFlex
+    ).size
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Filter chips
-        LazyRow(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+
+        // ── Filter header: label + active count + Clear All ──────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 0.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            item { FilterDropdown("Club/Set",   clubSetOpts, uiState.filters.clubSet)   { viewModel.setFilter("clubSet",   it) } }
-            item { FilterDropdown("Club",       clubOpts,    uiState.filters.club)      { viewModel.setFilter("club",      it) } }
-            item { FilterDropdown("Loft",       loftOpts,    uiState.filters.loft)      { viewModel.setFilter("loft",      it) } }
-            item { FilterDropdown("Shaft Type", shaftOpts,   uiState.filters.shaftType) { viewModel.setFilter("shaftType", it) } }
-            item { FilterDropdown("Flex",       flexOpts,    uiState.filters.shaftFlex) { viewModel.setFilter("shaftFlex", it) } }
-            if (uiState.filters.isActive) {
-                item {
-                    TextButton(onClick = viewModel::clearFilters) { Text("Clear") }
+            Text(
+                text = if (activeFilterCount > 0) "Filters · $activeFilterCount active"
+                       else "Filters",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = if (activeFilterCount > 0) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (activeFilterCount > 0) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            if (filters.isActive) {
+                TextButton(
+                    onClick = viewModel::clearFilters,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text("Clear All", style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
 
+        // ── Filter dropdowns ─────────────────────────────────────────────────
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item { FilterDropdown("Club/Set",   clubSetOpts, filters.clubSet)   { viewModel.setFilter("clubSet",   it) } }
+            item { FilterDropdown("Club",       clubOpts,    filters.club)      { viewModel.setFilter("club",      it) } }
+            item { FilterDropdown("Loft",       loftOpts,    filters.loft)      { viewModel.setFilter("loft",      it) } }
+            item { FilterDropdown("Shaft Type", shaftOpts,   filters.shaftType) { viewModel.setFilter("shaftType", it) } }
+            item { FilterDropdown("Flex",       flexOpts,    filters.shaftFlex) { viewModel.setFilter("shaftFlex", it) } }
+        }
+
+        // ── Active filter chips (dismissible individually) ────────────────────
+        if (filters.isActive) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                filters.clubSet?.let { value ->
+                    item {
+                        ActiveFilterChip("Club/Set: $value") { viewModel.setFilter("clubSet", null) }
+                    }
+                }
+                filters.club?.let { value ->
+                    item {
+                        ActiveFilterChip("Club: $value") { viewModel.setFilter("club", null) }
+                    }
+                }
+                filters.loft?.let { value ->
+                    item {
+                        ActiveFilterChip("Loft: $value") { viewModel.setFilter("loft", null) }
+                    }
+                }
+                filters.shaftType?.let { value ->
+                    item {
+                        ActiveFilterChip("Shaft: $value") { viewModel.setFilter("shaftType", null) }
+                    }
+                }
+                filters.shaftFlex?.let { value ->
+                    item {
+                        ActiveFilterChip("Flex: $value") { viewModel.setFilter("shaftFlex", null) }
+                    }
+                }
+            }
+        }
+
+        // ── Result count ──────────────────────────────────────────────────────
+        val countText = when {
+            filters.isActive ->
+                "${uiState.filteredRows.size} of ${uiState.variantRows.size} variants · $activeFilterCount filter${if (activeFilterCount > 1) "s" else ""} active"
+            else ->
+                "${uiState.variantRows.size} variants"
+        }
         Text(
-            text = "${uiState.filteredRows.size} of ${uiState.variantRows.size} variants",
+            text = countText,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+            color = if (filters.isActive) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
         )
 
-        // Table header
+        // ── Table header ──────────────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -154,7 +222,7 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
 
-        // Filter empty state
+        // ── Filter empty state / data rows ────────────────────────────────────
         if (uiState.filteredRows.isEmpty()) {
             Box(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -166,18 +234,17 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
                     modifier = Modifier.padding(32.dp)
                 ) {
                     Text(
-                        text = "No variants match the selected filters.",
+                        text = "No variants match the active filters.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
                     TextButton(onClick = viewModel::clearFilters) {
-                        Text("Clear Filters")
+                        Text("Clear All Filters")
                     }
                 }
             }
         } else {
-            // Data rows — alternating row shading instead of dividers
             LazyColumn(modifier = Modifier.weight(1f)) {
                 itemsIndexed(uiState.filteredRows, key = { _, row -> row.id }) { index, row ->
                     TableRow(row, hScroll, isEven = index % 2 == 0)
@@ -185,7 +252,7 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
             }
         }
 
-        // Raw JSON viewer — collapsed by default
+        // ── JSON viewer ───────────────────────────────────────────────────────
         if (uiState.fetchedResults.isNotEmpty()) {
             val jsonContent = uiState.fetchedResults.joinToString("\n\n") { result ->
                 "=== ${result.club.displayValue} ===\n${result.rawJson.substringAfter("\n\n")}"
@@ -198,6 +265,19 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
         }
     }
 }
+
+// ── Active filter chip — selected appearance, tap to dismiss ─────────────────
+
+@Composable
+private fun ActiveFilterChip(label: String, onDismiss: () -> Unit) {
+    FilterChip(
+        selected = true,
+        onClick = onDismiss,
+        label = { Text(label, style = MaterialTheme.typography.labelSmall) }
+    )
+}
+
+// ── Table composables (unchanged) ────────────────────────────────────────────
 
 @Composable
 private fun TableRow(row: VariantRow, hScroll: ScrollState, isEven: Boolean) {
