@@ -4,6 +4,7 @@ import android.app.Application
 import android.webkit.WebView
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.whutshisname.cgolfapp.data.PreferencesRepository
 import com.whutshisname.cgolfapp.model.ClubType
 import com.whutshisname.cgolfapp.model.VariantRow
 import com.whutshisname.cgolfapp.model.availableConditionCount
@@ -27,6 +28,8 @@ const val API_URL =
     "https://www.callawaygolfpreowned.com/on/demandware.store/Sites-CGPO5-Site/default/Product-VariantData"
 const val USER_AGENT =
     "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36"
+
+enum class ViewMode { TABLE, CARDS }
 
 enum class SortOrder(val label: String) {
     NONE("Default"),
@@ -62,6 +65,10 @@ data class UiState(
     val filters: VariantFilters = VariantFilters(),
     val sortOrder: SortOrder = SortOrder.NONE,
     val searchQuery: String = "",
+    val viewMode: ViewMode = ViewMode.TABLE,
+    val favoritePids: Set<String> = emptySet(),
+    val showFavoritesOnly: Boolean = false,
+    val selectedRow: VariantRow? = null,
     val jsonExpanded: Boolean = false,
     val errorMessage: String? = null
 )
@@ -74,10 +81,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var webView: WebView? = null
     private val fetchMutex = Mutex()
     private var pendingContinuation: CancellableContinuation<String>? = null
+    private val prefsRepo by lazy { PreferencesRepository(getApplication()) }
 
     init {
         loadClubTypes()
+        collectPreferences()
     }
+
+    // ── Persistence (DataStore) ───────────────────────────────────────────────
+
+    private fun collectPreferences() {
+        viewModelScope.launch {
+            prefsRepo.favoritePids.collect { pids ->
+                _uiState.update { it.copy(favoritePids = pids) }
+            }
+        }
+        viewModelScope.launch {
+            prefsRepo.viewMode.collect { mode ->
+                _uiState.update { it.copy(viewMode = mode) }
+            }
+        }
+    }
+
+    fun toggleFavorite(pid: String) {
+        viewModelScope.launch { prefsRepo.toggleFavorite(pid) }
+    }
+
+    fun setViewMode(mode: ViewMode) {
+        viewModelScope.launch { prefsRepo.setViewMode(mode) }
+    }
+
+    fun selectRow(row: VariantRow?) {
+        _uiState.update { it.copy(selectedRow = row) }
+    }
+
+    // ── WebView ───────────────────────────────────────────────────────────────
 
     fun attachWebView(webView: WebView) {
         this.webView = webView
