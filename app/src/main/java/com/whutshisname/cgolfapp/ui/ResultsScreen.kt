@@ -360,7 +360,7 @@ private fun VariantDetailSheet(
 
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "Tap a price to open that listing on Callaway Preowned.",
+                text = "Tap a price to open that listing in your browser.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -303,7 +303,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (failures == totalRequested) {
             return when {
                 firstFailRaw.startsWith("HTTP 429") ->
-                    "Callaway is rate-limiting requests. Please wait a moment and try again."
+                    "The store is rate-limiting requests. Please wait a moment and try again."
                 firstFailRaw.startsWith("JS Error") || firstFailRaw.startsWith("Error:") ->
                     "Network error. Please check your connection and try again."
                 else -> "Failed to retrieve club data. Please try again."
