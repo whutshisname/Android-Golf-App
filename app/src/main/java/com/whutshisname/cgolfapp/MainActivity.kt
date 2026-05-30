@@ -56,6 +56,16 @@ import com.whutshisname.cgolfapp.ui.clubCategorySection
 import com.whutshisname.cgolfapp.ui.ResultsScreen
 import com.whutshisname.cgolfapp.ui.theme.MyApplicationTheme
 
+// Stable Select-tab category order. Subcategories sit directly after their parent.
+private val CATEGORY_ORDER = listOf(
+    "drivers", "mini-drivers", "fairway-woods", "hybrids", "iron-sets", "single-irons", "wedges"
+)
+
+// Maps a UI subcategory to its parent category label (for nested presentation).
+private val SUBCATEGORY_PARENTS = mapOf(
+    "mini-drivers" to "Drivers"
+)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -189,12 +199,11 @@ fun AppScreen(viewModel: MainViewModel = viewModel()) {
 
 @Composable
 private fun SelectTab(uiState: UiState, viewModel: MainViewModel) {
-    val categoryOrder = listOf("drivers", "mini-drivers", "fairway-woods", "hybrids", "iron-sets", "single-irons", "wedges")
     val grouped = remember(uiState.clubTypes) {
         uiState.clubTypes
             .groupBy { it.category }
             .entries
-            .sortedBy { (category, _) -> categoryOrder.indexOf(category).takeIf { it >= 0 } ?: Int.MAX_VALUE }
+            .sortedBy { (category, _) -> CATEGORY_ORDER.indexOf(category).takeIf { it >= 0 } ?: Int.MAX_VALUE }
     }
 
     // Per-category expansion state (ephemeral UI state). Smart default applied once
@@ -249,12 +258,15 @@ private fun SelectTab(uiState: UiState, viewModel: MainViewModel) {
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             grouped.forEach { (category, clubs) ->
+                val parent = SUBCATEGORY_PARENTS[category]
                 clubCategorySection(
                     category = category,
                     label = clubs.first().categoryLabel,
                     clubs = clubs.sortedBy { it.displayValue },
                     selectedKeys = uiState.selectedKeys,
                     expanded = expandedCategories[category] ?: false,
+                    isSubcategory = parent != null,
+                    parentLabel = parent,
                     onToggleExpanded = {
                         expandedCategories[category] = !(expandedCategories[category] ?: false)
                     },

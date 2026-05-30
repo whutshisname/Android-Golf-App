@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.SubdirectoryArrowRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -62,7 +63,9 @@ fun LazyListScope.clubCategorySection(
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
     onToggle: (key: String) -> Unit,
-    onSelectAll: (selectAll: Boolean) -> Unit
+    onSelectAll: (selectAll: Boolean) -> Unit,
+    isSubcategory: Boolean = false,
+    parentLabel: String? = null
 ) {
     val selectedCount = clubs.count { it.selectionKey in selectedKeys }
     val selectAllState = when {
@@ -78,18 +81,22 @@ fun LazyListScope.clubCategorySection(
             selectedCount = selectedCount,
             expanded = expanded,
             selectAllState = selectAllState,
+            isSubcategory = isSubcategory,
+            parentLabel = parentLabel,
             onToggleExpanded = onToggleExpanded,
             onSelectAll = { onSelectAll(selectAllState != ToggleableState.On) }
         )
     }
 
     if (expanded) {
+        // Subcategory cards are indented further so the nesting reads visually.
+        val cardStart = if (isSubcategory) 20.dp else 4.dp
         items(clubs, key = { it.selectionKey }) { club ->
             ClubCard(
                 club = club,
                 isSelected = club.selectionKey in selectedKeys,
                 onToggle = { onToggle(club.selectionKey) },
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 3.dp)
+                modifier = Modifier.padding(start = cardStart, end = 4.dp, top = 3.dp, bottom = 3.dp)
             )
         }
     }
@@ -102,6 +109,8 @@ private fun CategoryHeader(
     selectedCount: Int,
     expanded: Boolean,
     selectAllState: ToggleableState,
+    isSubcategory: Boolean,
+    parentLabel: String?,
     onToggleExpanded: () -> Unit,
     onSelectAll: () -> Unit
 ) {
@@ -112,22 +121,32 @@ private fun CategoryHeader(
     val subtitle = if (selectedCount > 0) "$selectedCount of $clubCount selected"
                    else "$clubCount clubs"
 
-    // Opaque surface (tonalElevation) so pinned headers fully cover scrolling cards.
+    // Subcategory headers sit on a lower elevation and indent, so they read as
+    // nested beneath their parent category rather than as a peer.
     Surface(
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp,
+        tonalElevation = if (isSubcategory) 1.dp else 3.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 56.dp)
+                .heightIn(min = if (isSubcategory) 48.dp else 56.dp)
                 .clickable(
                     onClickLabel = if (expanded) "Collapse $label" else "Expand $label"
                 ) { onToggleExpanded() }
-                .padding(start = 8.dp, end = 4.dp),
+                .padding(start = if (isSubcategory) 20.dp else 8.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (isSubcategory) {
+                Icon(
+                    imageVector = Icons.Filled.SubdirectoryArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(2.dp))
+            }
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowDown,
                 contentDescription = null,
@@ -136,11 +155,21 @@ private fun CategoryHeader(
             )
             Spacer(Modifier.width(6.dp))
             Column(modifier = Modifier.weight(1f)) {
+                // Breadcrumb overline communicates parentage, e.g. "DRIVERS"
+                if (isSubcategory && parentLabel != null) {
+                    Text(
+                        text = parentLabel.uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    style = if (isSubcategory) MaterialTheme.typography.titleSmall
+                            else MaterialTheme.typography.titleMedium,
+                    fontWeight = if (isSubcategory) FontWeight.SemiBold else FontWeight.Bold,
+                    color = if (isSubcategory) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.primary
                 )
                 Text(
                     text = subtitle,

@@ -298,17 +298,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun buildErrorMessage(results: List<FetchedResult>, rows: List<VariantRow>, totalRequested: Int): String? {
         val failures = results.count { !it.rawJson.startsWith("HTTP 200") }
         val firstFailRaw = results.firstOrNull { !it.rawJson.startsWith("HTTP 200") }?.rawJson ?: ""
-        return when {
-            failures == totalRequested -> when {
+
+        // Every request failed — diagnose the cause.
+        if (failures == totalRequested) {
+            return when {
                 firstFailRaw.startsWith("HTTP 429") ->
                     "Callaway is rate-limiting requests. Please wait a moment and try again."
                 firstFailRaw.startsWith("JS Error") || firstFailRaw.startsWith("Error:") ->
                     "Network error. Please check your connection and try again."
                 else -> "Failed to retrieve club data. Please try again."
             }
-            failures > 0 -> "$failures of $totalRequested clubs failed to load."
-            rows.isEmpty() -> "No variant data found for the selected clubs."
-            else -> null
+        }
+
+        // Clubs that fetched OK (HTTP 200) but produced zero variants — i.e. no
+        // inventory, or an unverified cgid mapping that the API doesn't recognise.
+        val pidsWithRows = rows.map { it.clubPid }.toSet()
+        val emptyClubs = results
+            .filter { it.rawJson.startsWith("HTTP 200") && it.club.pid !in pidsWithRows }
+            .map { it.club.displayValue }
+
+        val parts = buildList {
+            if (failures > 0) add("$failures of $totalRequested clubs failed to load")
+            if (emptyClubs.isNotEmpty()) add("No inventory found for: ${emptyClubs.joinToString(", ")}")
+        }
+        return when {
+            parts.isNotEmpty() -> parts.joinToString(" · ")
+            rows.isEmpty()     -> "No variant data found for the selected clubs."
+            else               -> null
         }
     }
 
