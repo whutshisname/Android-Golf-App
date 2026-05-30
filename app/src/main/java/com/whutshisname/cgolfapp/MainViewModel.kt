@@ -6,12 +6,17 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.whutshisname.cgolfapp.model.ClubType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
+import kotlin.coroutines.resume
 
 const val SITE_URL = "https://www.callawaygolfpreowned.com/"
 const val API_URL =
@@ -22,9 +27,11 @@ const val USER_AGENT =
 data class UiState(
     val sessionReady: Boolean = false,
     val isLoading: Boolean = false,
+    val fetchProgress: String = "",
     val responseText: String = "",
     val clubTypes: List<ClubType> = emptyList(),
-    val selectedKeys: Set<String> = emptySet()
+    val selectedKeys: Set<String> = emptySet(),
+    val rawJsonResults: List<String> = emptyList()
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -33,6 +40,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private var webView: WebView? = null
+
+    // Guards evaluateJavascript — the WebView has one JS context; calls cannot overlap.
+    private val fetchMutex = Mutex()
+    private var pendingContinuation: CancellableContinuation<String>? = null
 
     init {
         loadClubTypes()
@@ -46,8 +57,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(sessionReady = true) }
     }
 
+    // Called by JsBridge on the main thread. Resumes the suspended fetchOneSuspend coroutine.
     fun onFetchResult(result: String) {
-        _uiState.update { it.copy(responseText = result, isLoading = false) }
+        val cont = pendingContinuation
+        if (cont != null) {
+            pendingContinuation = null
+            cont.resume(result)
+        }
     }
 
     fun toggleSelection(key: String) {
@@ -68,15 +84,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Fetches the first selected club. Replaced with full sequential multi-fetch in Step 3.
     fun fetchSelected() {
         val state = _uiState.value
-        val key = state.selectedKeys.firstOrNull() ?: return
-        val club = state.clubTypes.find { it.selectionKey == key } ?: return
-        _uiState.update { it.copy(isLoading = true, responseText = "") }
-        val url = "$API_URL?pid=${club.pid}&cgid=${club.cgid}&format=json"
-        webView?.evaluateJavascript(buildFetchJs(url), null)
+        val selected = state.selectedKeys.mapNotNull { key ->
+            state.clubTypes.find { it.selectionKey == key }
+        }
+        if (selected.isEmpty()) return
+
+        _uiState.update { it.copy(isLoading = true, rawJsonResults = emptyList(), responseText = "") }
+
+        viewModelScope.launch {
+            selected.forEachIndexed { i, club ->
+                _uiState.update { it.copy(fetchProgress = "Fetching ${i + 1} of ${selected.size}...") }
+                val result = fetchOneSuspend(club.pid, club.cgid)
+                _uiState.update { it.copy(rawJsonResults = it.rawJsonResults + result) }
+            }
+            val joined = _uiState.value.rawJsonResults.joinToString("\n\n---\n\n")
+            _uiState.update { it.copy(isLoading = false, fetchProgress = "", responseText = joined) }
+        }
     }
+
+    // Suspends until JsBridge delivers a result. Mutex ensures only one call is in-flight.
+    private suspend fun fetchOneSuspend(pid: String, cgid: String): String =
+        fetchMutex.withLock {
+            suspendCancellableCoroutine { cont ->
+                pendingContinuation = cont
+                cont.invokeOnCancellation { pendingContinuation = null }
+                val url = "$API_URL?pid=$pid&cgid=$cgid&format=json"
+                webView?.evaluateJavascript(buildFetchJs(url), null)
+                    ?: cont.resume("Error: WebView not ready")
+            }
+        }
 
     private fun loadClubTypes() {
         viewModelScope.launch(Dispatchers.IO) {

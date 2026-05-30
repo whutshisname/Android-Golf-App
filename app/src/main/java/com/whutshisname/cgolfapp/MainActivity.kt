@@ -20,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -119,17 +120,27 @@ fun ApiTestScreen(
             }
         }
 
+        if (uiState.isLoading) {
+            Text(
+                text = uiState.fetchProgress,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+
         Button(
             onClick = viewModel::fetchSelected,
             enabled = uiState.sessionReady && !uiState.isLoading && uiState.selectedKeys.isNotEmpty(),
             modifier = Modifier.fillMaxWidth()
         ) {
-            val label = when {
-                uiState.isLoading -> "Loading..."
-                uiState.selectedKeys.isEmpty() -> "Select clubs to fetch"
-                else -> "Fetch ${uiState.selectedKeys.size} selected"
-            }
-            Text(label)
+            Text(
+                when {
+                    uiState.isLoading -> "Fetching..."
+                    uiState.selectedKeys.isEmpty() -> "Select clubs to fetch"
+                    else -> "Fetch ${uiState.selectedKeys.size} selected"
+                }
+            )
         }
 
         if (uiState.responseText.isNotEmpty()) {
