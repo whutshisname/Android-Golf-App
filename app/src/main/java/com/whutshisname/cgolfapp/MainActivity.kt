@@ -12,27 +12,31 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.whutshisname.cgolfapp.ui.ClubCategoryGroup
+import com.whutshisname.cgolfapp.ui.ResultsScreen
 import com.whutshisname.cgolfapp.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
@@ -42,7 +46,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             MyApplicationTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    ApiTestScreen(modifier = Modifier.padding(innerPadding))
+                    AppScreen(modifier = Modifier.padding(innerPadding))
                 }
             }
         }
@@ -51,27 +55,20 @@ class MainActivity : ComponentActivity() {
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-fun ApiTestScreen(
+fun AppScreen(
     modifier: Modifier = Modifier,
     viewModel: MainViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    val scope = rememberCoroutineScope()
 
-    // Group clubs by category, preserving a stable category order.
-    val categoryOrder = listOf("drivers", "fairway-woods", "hybrids", "iron-sets", "single-irons", "wedges")
-    val grouped = remember(uiState.clubTypes) {
-        uiState.clubTypes
-            .groupBy { it.cgid }
-            .entries
-            .sortedBy { (cgid, _) -> categoryOrder.indexOf(cgid).takeIf { it >= 0 } ?: Int.MAX_VALUE }
+    // Auto-switch to Results tab when fetch completes.
+    LaunchedEffect(uiState.variantRows.size) {
+        if (uiState.variantRows.isNotEmpty()) pagerState.animateScrollToPage(1)
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
+    Column(modifier = modifier.fillMaxSize()) {
         // 1dp — keeps the WebView in the tree so the Cloudflare session stays alive.
         AndroidView(
             factory = { context ->
@@ -92,18 +89,57 @@ fun ApiTestScreen(
                     loadUrl(SITE_URL)
                 }.also { viewModel.attachWebView(it) }
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
+            modifier = Modifier.fillMaxWidth().height(1.dp)
         )
 
-        Text("Callaway Golf", style = MaterialTheme.typography.headlineSmall)
+        PrimaryTabRow(selectedTabIndex = pagerState.currentPage) {
+            Tab(
+                selected = pagerState.currentPage == 0,
+                onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                text = { Text("Select") }
+            )
+            Tab(
+                selected = pagerState.currentPage == 1,
+                onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                text = {
+                    val count = uiState.variantRows.size
+                    Text(if (count > 0) "Results ($count)" else "Results")
+                }
+            )
+        }
 
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            when (page) {
+                0 -> SelectTab(uiState, viewModel)
+                1 -> ResultsScreen(uiState, viewModel)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectTab(uiState: UiState, viewModel: MainViewModel) {
+    val categoryOrder = listOf("drivers", "fairway-woods", "hybrids", "iron-sets", "single-irons", "wedges")
+    val grouped = remember(uiState.clubTypes) {
+        uiState.clubTypes
+            .groupBy { it.cgid }
+            .entries
+            .sortedBy { (cgid, _) -> categoryOrder.indexOf(cgid).takeIf { it >= 0 } ?: Int.MAX_VALUE }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         Text(
             text = if (uiState.sessionReady) "Session: Ready" else "Session: Establishing...",
             style = MaterialTheme.typography.bodySmall,
             color = if (uiState.sessionReady) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 8.dp)
         )
 
         LazyColumn(modifier = Modifier.weight(1f)) {
@@ -132,7 +168,7 @@ fun ApiTestScreen(
         Button(
             onClick = viewModel::fetchSelected,
             enabled = uiState.sessionReady && !uiState.isLoading && uiState.selectedKeys.isNotEmpty(),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
         ) {
             Text(
                 when {
@@ -140,17 +176,6 @@ fun ApiTestScreen(
                     uiState.selectedKeys.isEmpty() -> "Select clubs to fetch"
                     else -> "Fetch ${uiState.selectedKeys.size} selected"
                 }
-            )
-        }
-
-        if (uiState.responseText.isNotEmpty()) {
-            Text(
-                text = uiState.responseText,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 220.dp)
-                    .verticalScroll(rememberScrollState())
             )
         }
     }

@@ -5,8 +5,9 @@ import android.webkit.WebView
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.whutshisname.cgolfapp.model.ClubType
-import kotlinx.coroutines.Dispatchers
+import com.whutshisname.cgolfapp.model.VariantRow
 import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,6 +17,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
+import org.json.JSONObject
 import kotlin.coroutines.resume
 
 const val SITE_URL = "https://www.callawaygolfpreowned.com/"
@@ -24,14 +26,29 @@ const val API_URL =
 const val USER_AGENT =
     "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36"
 
+data class FetchedResult(val club: ClubType, val rawJson: String)
+
+data class VariantFilters(
+    val clubSet: String? = null,
+    val club: String? = null,
+    val loft: String? = null,
+    val shaftType: String? = null,
+    val shaftFlex: String? = null
+) {
+    val isActive get() = clubSet != null || club != null || loft != null ||
+                         shaftType != null || shaftFlex != null
+}
+
 data class UiState(
     val sessionReady: Boolean = false,
     val isLoading: Boolean = false,
     val fetchProgress: String = "",
-    val responseText: String = "",
     val clubTypes: List<ClubType> = emptyList(),
     val selectedKeys: Set<String> = emptySet(),
-    val rawJsonResults: List<String> = emptyList()
+    val fetchedResults: List<FetchedResult> = emptyList(),
+    val variantRows: List<VariantRow> = emptyList(),
+    val filteredRows: List<VariantRow> = emptyList(),
+    val filters: VariantFilters = VariantFilters()
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -40,8 +57,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private var webView: WebView? = null
-
-    // Guards evaluateJavascript — the WebView has one JS context; calls cannot overlap.
     private val fetchMutex = Mutex()
     private var pendingContinuation: CancellableContinuation<String>? = null
 
@@ -57,7 +72,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(sessionReady = true) }
     }
 
-    // Called by JsBridge on the main thread. Resumes the suspended fetchOneSuspend coroutine.
     fun onFetchResult(result: String) {
         val cont = pendingContinuation
         if (cont != null) {
@@ -91,20 +105,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (selected.isEmpty()) return
 
-        _uiState.update { it.copy(isLoading = true, rawJsonResults = emptyList(), responseText = "") }
+        _uiState.update { it.copy(isLoading = true, fetchedResults = emptyList(), variantRows = emptyList(), filteredRows = emptyList(), filters = VariantFilters()) }
 
         viewModelScope.launch {
             selected.forEachIndexed { i, club ->
                 _uiState.update { it.copy(fetchProgress = "Fetching ${i + 1} of ${selected.size}...") }
-                val result = fetchOneSuspend(club.pid, club.cgid)
-                _uiState.update { it.copy(rawJsonResults = it.rawJsonResults + result) }
+                val raw = fetchOneSuspend(club.pid, club.cgid)
+                _uiState.update { it.copy(fetchedResults = it.fetchedResults + FetchedResult(club, raw)) }
             }
-            val joined = _uiState.value.rawJsonResults.joinToString("\n\n---\n\n")
-            _uiState.update { it.copy(isLoading = false, fetchProgress = "", responseText = joined) }
+            val rows = parseVariantRows(_uiState.value.fetchedResults)
+            _uiState.update { it.copy(isLoading = false, fetchProgress = "", variantRows = rows, filteredRows = rows) }
         }
     }
 
-    // Suspends until JsBridge delivers a result. Mutex ensures only one call is in-flight.
+    fun setFilter(field: String, value: String?) {
+        _uiState.update { state ->
+            val f = state.filters
+            val newFilters = when (field) {
+                "clubSet"   -> f.copy(clubSet = value)
+                "club"      -> f.copy(club = value)
+                "loft"      -> f.copy(loft = value)
+                "shaftType" -> f.copy(shaftType = value)
+                "shaftFlex" -> f.copy(shaftFlex = value)
+                else -> f
+            }
+            state.copy(filters = newFilters, filteredRows = applyFilters(state.variantRows, newFilters))
+        }
+    }
+
+    fun clearFilters() {
+        _uiState.update { state ->
+            state.copy(filters = VariantFilters(), filteredRows = state.variantRows)
+        }
+    }
+
     private suspend fun fetchOneSuspend(pid: String, cgid: String): String =
         fetchMutex.withLock {
             suspendCancellableCoroutine { cont ->
@@ -115,6 +149,75 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     ?: cont.resume("Error: WebView not ready")
             }
         }
+
+    private fun applyFilters(rows: List<VariantRow>, f: VariantFilters) = rows.filter { row ->
+        (f.clubSet   == null || row.clubSet   == f.clubSet) &&
+        (f.club      == null || row.club      == f.club) &&
+        (f.loft      == null || row.loft      == f.loft) &&
+        (f.shaftType == null || row.shaftType == f.shaftType) &&
+        (f.shaftFlex == null || row.shaftFlex == f.shaftFlex)
+    }
+
+    private fun parseVariantRows(results: List<FetchedResult>): List<VariantRow> {
+        val rows = mutableListOf<VariantRow>()
+        for (result in results) {
+            val body = result.rawJson.substringAfter("\n\n", missingDelimiterValue = "")
+                .trim()
+            if (body.isEmpty()) continue
+
+            val variants: JSONArray = try {
+                if (body.startsWith("[")) JSONArray(body)
+                else JSONObject(body).optJSONArray("variants") ?: continue
+            } catch (_: Exception) { continue }
+
+            for (i in 0 until variants.length()) {
+                val variant = variants.optJSONArray(i) ?: continue
+                val cells = buildMap<String, Any?> {
+                    for (j in 0 until variant.length()) {
+                        val cell = variant.optJSONObject(j) ?: continue
+                        put(cell.optString("label"), cell.opt("value"))
+                    }
+                }
+
+                fun str(label: String) = (cells[label] as? String).orEmpty()
+
+                fun price(label: String): Pair<String, String?> {
+                    return when (val v = cells[label]) {
+                        is JSONArray -> {
+                            val p = v.optString(1).takeIf { it.isNotBlank() && it != "null" } ?: "-"
+                            val u = v.optString(3).takeIf { it.isNotBlank() && it != "null" && it.startsWith("http") }
+                            Pair(p, u)
+                        }
+                        is String -> Pair(v, null)
+                        else -> Pair("-", null)
+                    }
+                }
+
+                val (outP, outU)  = price("Outlet")
+                val (lnP,  lnU)   = price("Like New")
+                val (vgP,  vgU)   = price("Very Good")
+                val (gdP,  gdU)   = price("Good")
+                val (avP,  avU)   = price("Average")
+
+                rows.add(VariantRow(
+                    id             = "${result.club.pid}-$i",
+                    productName    = result.club.displayValue,
+                    clubSet        = str("Club/Set"),
+                    club           = str("Club"),
+                    loft           = str("Loft"),
+                    shaftType      = str("Shaft Type"),
+                    shaftFlex      = str("Shaft Flex"),
+                    length         = str("Length"),
+                    outletPrice    = outP, outletUrl   = outU,
+                    likeNewPrice   = lnP,  likeNewUrl  = lnU,
+                    veryGoodPrice  = vgP,  veryGoodUrl = vgU,
+                    goodPrice      = gdP,  goodUrl     = gdU,
+                    averagePrice   = avP,  averageUrl  = avU
+                ))
+            }
+        }
+        return rows
+    }
 
     private fun loadClubTypes() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -127,9 +230,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val clubs = (0 until array.length()).map { i ->
                     val obj = array.getJSONObject(i)
                     ClubType(
-                        cgid = obj.getString("cgid"),
+                        cgid         = obj.getString("cgid"),
                         displayValue = obj.getString("displayValue"),
-                        pid = obj.getString("pid")
+                        pid          = obj.getString("pid")
                     )
                 }
                 _uiState.update { it.copy(clubTypes = clubs) }
