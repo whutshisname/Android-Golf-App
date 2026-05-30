@@ -22,10 +22,15 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.TableRows
+import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -50,6 +55,7 @@ import com.whutshisname.cgolfapp.MainViewModel
 import com.whutshisname.cgolfapp.SortOrder
 import com.whutshisname.cgolfapp.UiState
 import com.whutshisname.cgolfapp.VariantFilters
+import com.whutshisname.cgolfapp.ViewMode
 import com.whutshisname.cgolfapp.model.VariantRow
 
 private val W_PRODUCT  = 130.dp
@@ -134,6 +140,16 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f)
             )
+            val nextMode = if (uiState.viewMode == ViewMode.TABLE) ViewMode.CARDS else ViewMode.TABLE
+            IconButton(onClick = { viewModel.setViewMode(nextMode) }) {
+                Icon(
+                    imageVector = if (uiState.viewMode == ViewMode.TABLE) Icons.Filled.ViewAgenda
+                                  else Icons.Filled.TableRows,
+                    contentDescription = if (uiState.viewMode == ViewMode.TABLE) "Switch to card view"
+                                         else "Switch to table view",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
             SortDropdown(
                 current = uiState.sortOrder,
                 onSelect = viewModel::setSortOrder
@@ -225,27 +241,29 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp)
         )
 
-        // ── Table header ──────────────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(hScroll)
-                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
-                .padding(vertical = 8.dp)
-        ) {
-            HeaderCell("Product",    W_PRODUCT)
-            HeaderCell("Club/Set",   W_CLUB_SET)
-            HeaderCell("Club",       W_CLUB)
-            HeaderCell("Loft",       W_LOFT)
-            HeaderCell("Shaft Type", W_SHAFT)
-            HeaderCell("Flex",       W_FLEX)
-            HeaderCell("Outlet",     W_PRICE)
-            HeaderCell("Like New",   W_PRICE)
-            HeaderCell("Very Good",  W_PRICE)
-            HeaderCell("Good",       W_PRICE)
-            HeaderCell("Average",    W_PRICE)
+        // ── Table header (table view only) ────────────────────────────────────
+        if (uiState.viewMode == ViewMode.TABLE) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(hScroll)
+                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                    .padding(vertical = 8.dp)
+            ) {
+                HeaderCell("Product",    W_PRODUCT)
+                HeaderCell("Club/Set",   W_CLUB_SET)
+                HeaderCell("Club",       W_CLUB)
+                HeaderCell("Loft",       W_LOFT)
+                HeaderCell("Shaft Type", W_SHAFT)
+                HeaderCell("Flex",       W_FLEX)
+                HeaderCell("Outlet",     W_PRICE)
+                HeaderCell("Like New",   W_PRICE)
+                HeaderCell("Very Good",  W_PRICE)
+                HeaderCell("Good",       W_PRICE)
+                HeaderCell("Average",    W_PRICE)
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
 
         // ── Filter empty state / data rows ────────────────────────────────────
         if (uiState.filteredRows.isEmpty()) {
@@ -278,10 +296,20 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
                     }
                 }
             }
-        } else {
+        } else if (uiState.viewMode == ViewMode.TABLE) {
             LazyColumn(modifier = Modifier.weight(1f)) {
                 itemsIndexed(uiState.filteredRows, key = { _, row -> row.id }) { index, row ->
                     TableRow(row, hScroll, isEven = index % 2 == 0)
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                itemsIndexed(uiState.filteredRows, key = { _, row -> row.id }) { _, row ->
+                    VariantCard(row)
                 }
             }
         }
@@ -297,6 +325,82 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
                 onToggle = viewModel::toggleJsonExpanded
             )
         }
+    }
+}
+
+// ── Card view — phone-optimized result card ──────────────────────────────────
+
+@Composable
+private fun VariantCard(row: VariantRow) {
+    val uriHandler = LocalUriHandler.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = row.productName,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(6.dp))
+
+            // Spec line: only non-blank fields, joined with dots
+            val specs = listOfNotNull(
+                row.club.takeIf { it.isNotBlank() },
+                row.clubSet.takeIf { it.isNotBlank() },
+                row.loft.takeIf { it.isNotBlank() }?.let { "Loft $it" },
+                row.shaftType.takeIf { it.isNotBlank() },
+                row.shaftFlex.takeIf { it.isNotBlank() }?.let { "Flex $it" }
+            )
+            if (specs.isNotEmpty()) {
+                Text(
+                    text = specs.joinToString("  ·  "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(8.dp))
+
+            // Condition prices — each clickable when a link exists
+            PriceLine("Outlet",    row.outletPrice,   row.outletUrl)   { uriHandler.openUri(it) }
+            PriceLine("Like New",  row.likeNewPrice,  row.likeNewUrl)  { uriHandler.openUri(it) }
+            PriceLine("Very Good", row.veryGoodPrice, row.veryGoodUrl) { uriHandler.openUri(it) }
+            PriceLine("Good",      row.goodPrice,     row.goodUrl)     { uriHandler.openUri(it) }
+            PriceLine("Average",   row.averagePrice,  row.averageUrl)  { uriHandler.openUri(it) }
+        }
+    }
+}
+
+@Composable
+private fun PriceLine(condition: String, price: String, url: String?, onTap: (String) -> Unit) {
+    if (price == "-" || price.isBlank()) return
+    val hasLink = url != null
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (hasLink) Modifier.clickable { onTap(url!!) } else Modifier)
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = condition,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = price,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = if (hasLink) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+            textDecoration = if (hasLink) TextDecoration.Underline else TextDecoration.None
+        )
     }
 }
 
