@@ -12,24 +12,26 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.whutshisname.cgolfapp.ui.ClubCategoryGroup
 import com.whutshisname.cgolfapp.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
@@ -53,8 +55,15 @@ fun ApiTestScreen(
     viewModel: MainViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var pid by remember { mutableStateOf("irons-2024-apex-cb-chrome") }
-    var cgid by remember { mutableStateOf("single-irons") }
+
+    // Group clubs by category, preserving a stable category order.
+    val categoryOrder = listOf("drivers", "fairway-woods", "hybrids", "iron-sets", "single-irons", "wedges")
+    val grouped = remember(uiState.clubTypes) {
+        uiState.clubTypes
+            .groupBy { it.cgid }
+            .entries
+            .sortedBy { (cgid, _) -> categoryOrder.indexOf(cgid).takeIf { it >= 0 } ?: Int.MAX_VALUE }
+    }
 
     Column(
         modifier = modifier
@@ -62,8 +71,7 @@ fun ApiTestScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // 1dp keeps the WebView in the composition tree so the Cloudflare session
-        // stays alive, but it takes no visible space.
+        // 1dp — keeps the WebView in the tree so the Cloudflare session stays alive.
         AndroidView(
             factory = { context ->
                 WebView(context).apply {
@@ -88,7 +96,7 @@ fun ApiTestScreen(
                 .height(1.dp)
         )
 
-        Text("Callaway Variant API POC", style = MaterialTheme.typography.headlineSmall)
+        Text("Callaway Golf", style = MaterialTheme.typography.headlineSmall)
 
         Text(
             text = if (uiState.sessionReady) "Session: Ready" else "Session: Establishing...",
@@ -97,28 +105,31 @@ fun ApiTestScreen(
                     else MaterialTheme.colorScheme.error
         )
 
-        OutlinedTextField(
-            value = pid,
-            onValueChange = { pid = it },
-            label = { Text("pid") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        OutlinedTextField(
-            value = cgid,
-            onValueChange = { cgid = it },
-            label = { Text("cgid") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            grouped.forEach { (cgid, clubs) ->
+                item(key = cgid) {
+                    ClubCategoryGroup(
+                        clubs = clubs.sortedBy { it.displayValue },
+                        selectedKeys = uiState.selectedKeys,
+                        onToggle = viewModel::toggleSelection,
+                        onSelectAll = { selectAll -> viewModel.selectAllInCategory(cgid, selectAll) }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                }
+            }
+        }
 
         Button(
-            onClick = { viewModel.fetch(pid.trim(), cgid.trim()) },
-            enabled = uiState.sessionReady && !uiState.isLoading,
+            onClick = viewModel::fetchSelected,
+            enabled = uiState.sessionReady && !uiState.isLoading && uiState.selectedKeys.isNotEmpty(),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (uiState.isLoading) "Loading..." else "Fetch Variant Data")
+            val label = when {
+                uiState.isLoading -> "Loading..."
+                uiState.selectedKeys.isEmpty() -> "Select clubs to fetch"
+                else -> "Fetch ${uiState.selectedKeys.size} selected"
+            }
+            Text(label)
         }
 
         if (uiState.responseText.isNotEmpty()) {
@@ -127,7 +138,7 @@ fun ApiTestScreen(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
+                    .heightIn(max = 220.dp)
                     .verticalScroll(rememberScrollState())
             )
         }
