@@ -38,8 +38,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,7 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.whutshisname.cgolfapp.ui.ClubCategoryGroup
+import com.whutshisname.cgolfapp.ui.clubCategorySection
 import com.whutshisname.cgolfapp.ui.ResultsScreen
 import com.whutshisname.cgolfapp.ui.theme.MyApplicationTheme
 
@@ -192,25 +195,47 @@ private fun SelectTab(uiState: UiState, viewModel: MainViewModel) {
             .sortedBy { (cgid, _) -> categoryOrder.indexOf(cgid).takeIf { it >= 0 } ?: Int.MAX_VALUE }
     }
 
+    // Per-category expansion state (ephemeral UI state). Smart default applied once
+    // clubs load: expand categories that contain selected clubs; if none selected,
+    // expand only the first category. Users can freely toggle afterwards.
+    val expandedCategories = remember { mutableStateMapOf<String, Boolean>() }
+    var defaultsApplied by remember { mutableStateOf(false) }
+    LaunchedEffect(grouped) {
+        if (!defaultsApplied && grouped.isNotEmpty()) {
+            val withSelections = grouped.filter { (_, clubs) ->
+                clubs.any { it.selectionKey in uiState.selectedKeys }
+            }
+            if (withSelections.isNotEmpty()) {
+                withSelections.forEach { (cgid, _) -> expandedCategories[cgid] = true }
+            } else {
+                expandedCategories[grouped.first().key] = true
+            }
+            defaultsApplied = true
+        }
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)
     ) {
         LazyColumn(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             grouped.forEach { (cgid, clubs) ->
-                item(key = cgid) {
-                    ClubCategoryGroup(
-                        clubs = clubs.sortedBy { it.displayValue },
-                        selectedKeys = uiState.selectedKeys,
-                        favoritePids = uiState.favoritePids,
-                        onToggle = viewModel::toggleSelection,
-                        onSelectAll = { selectAll -> viewModel.selectAllInCategory(cgid, selectAll) },
-                        onToggleFavorite = viewModel::toggleFavorite
-                    )
-                }
+                clubCategorySection(
+                    cgid = cgid,
+                    label = clubs.first().categoryLabel,
+                    clubs = clubs.sortedBy { it.displayValue },
+                    selectedKeys = uiState.selectedKeys,
+                    favoritePids = uiState.favoritePids,
+                    expanded = expandedCategories[cgid] ?: false,
+                    onToggleExpanded = {
+                        expandedCategories[cgid] = !(expandedCategories[cgid] ?: false)
+                    },
+                    onToggle = viewModel::toggleSelection,
+                    onSelectAll = { selectAll -> viewModel.selectAllInCategory(cgid, selectAll) },
+                    onToggleFavorite = viewModel::toggleFavorite
+                )
             }
         }
 

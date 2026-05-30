@@ -1,21 +1,29 @@
 package com.whutshisname.cgolfapp.ui
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Card
@@ -30,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -41,11 +50,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.whutshisname.cgolfapp.model.ClubType
 
-@Composable
-fun ClubCategoryGroup(
+/**
+ * Emits one collapsible category into a LazyColumn: a sticky header followed by
+ * the club cards (only when [expanded]). Building this directly into LazyListScope
+ * — rather than as a single composable item — is what enables sticky headers and
+ * per-card laziness. The club card design itself is unchanged.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+fun LazyListScope.clubCategorySection(
+    cgid: String,
+    label: String,
     clubs: List<ClubType>,
     selectedKeys: Set<String>,
     favoritePids: Set<String>,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
     onToggle: (key: String) -> Unit,
     onSelectAll: (selectAll: Boolean) -> Unit,
     onToggleFavorite: (pid: String) -> Unit
@@ -56,17 +75,21 @@ fun ClubCategoryGroup(
         selectedCount == 0          -> ToggleableState.Off
         else                        -> ToggleableState.Indeterminate
     }
-    val categoryLabel = clubs.first().categoryLabel
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    stickyHeader(key = "header-$cgid") {
         CategoryHeader(
-            label = categoryLabel,
+            label = label,
+            clubCount = clubs.size,
             selectedCount = selectedCount,
+            expanded = expanded,
             selectAllState = selectAllState,
+            onToggleExpanded = onToggleExpanded,
             onSelectAll = { onSelectAll(selectAllState != ToggleableState.On) }
         )
+    }
 
-        clubs.forEach { club ->
+    if (expanded) {
+        items(clubs, key = { it.selectionKey }) { club ->
             ClubCard(
                 club = club,
                 isSelected = club.selectionKey in selectedKeys,
@@ -82,50 +105,71 @@ fun ClubCategoryGroup(
 @Composable
 private fun CategoryHeader(
     label: String,
+    clubCount: Int,
     selectedCount: Int,
+    expanded: Boolean,
     selectAllState: ToggleableState,
+    onToggleExpanded: () -> Unit,
     onSelectAll: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 8.dp, end = 4.dp, top = 8.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.weight(1f)
-        )
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        label = "chevron"
+    )
+    val subtitle = if (selectedCount > 0) "$selectedCount of $clubCount selected"
+                   else "$clubCount clubs"
 
-        // Selected-count pill — only when some clubs in this category are selected
-        if (selectedCount > 0) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(end = 4.dp)
-            ) {
+    // Opaque surface (tonalElevation) so pinned headers fully cover scrolling cards.
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .clickable(
+                    onClickLabel = if (expanded) "Collapse $label" else "Expand $label"
+                ) { onToggleExpanded() }
+                .padding(start = 8.dp, end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.rotate(chevronRotation)
+            )
+            Spacer(Modifier.width(6.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "$selectedCount selected",
+                    text = label,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = subtitle,
                     style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                    fontWeight = if (selectedCount > 0) FontWeight.Medium else FontWeight.Normal,
+                    color = if (selectedCount > 0) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            // Category-level select-all — its own control, doesn't toggle expansion
+            TriStateCheckbox(
+                state = selectAllState,
+                onClick = onSelectAll,
+                modifier = Modifier.semantics {
+                    contentDescription = "Select all $label"
+                }
+            )
         }
-
-        TriStateCheckbox(
-            state = selectAllState,
-            onClick = onSelectAll,
-            modifier = Modifier.semantics {
-                contentDescription = "Select all $label"
-            }
-        )
     }
 }
+
+// ─── Club card (unchanged design) ─────────────────────────────────────────────
 
 @Composable
 private fun ClubCard(
