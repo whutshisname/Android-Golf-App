@@ -204,8 +204,10 @@ private fun SelectTab(uiState: UiState, viewModel: MainViewModel) {
                     ClubCategoryGroup(
                         clubs = clubs.sortedBy { it.displayValue },
                         selectedKeys = uiState.selectedKeys,
+                        favoritePids = uiState.favoritePids,
                         onToggle = viewModel::toggleSelection,
-                        onSelectAll = { selectAll -> viewModel.selectAllInCategory(cgid, selectAll) }
+                        onSelectAll = { selectAll -> viewModel.selectAllInCategory(cgid, selectAll) },
+                        onToggleFavorite = viewModel::toggleFavorite
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 2.dp),

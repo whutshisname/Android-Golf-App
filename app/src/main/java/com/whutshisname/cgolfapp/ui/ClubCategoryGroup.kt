@@ -10,7 +10,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -30,8 +35,10 @@ import com.whutshisname.cgolfapp.model.ClubType
 fun ClubCategoryGroup(
     clubs: List<ClubType>,
     selectedKeys: Set<String>,
+    favoritePids: Set<String>,
     onToggle: (key: String) -> Unit,
-    onSelectAll: (selectAll: Boolean) -> Unit
+    onSelectAll: (selectAll: Boolean) -> Unit,
+    onToggleFavorite: (pid: String) -> Unit
 ) {
     val selectedCount = clubs.count { it.selectionKey in selectedKeys }
     val selectAllState = when {
@@ -112,8 +119,18 @@ fun ClubCategoryGroup(
                     Text(
                         text = club.displayValue,
                         style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(start = 4.dp)
+                        modifier = Modifier.padding(start = 4.dp).weight(1f)
                     )
+                    val isFavorite = club.pid in favoritePids
+                    IconButton(onClick = { onToggleFavorite(club.pid) }) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                            contentDescription = if (isFavorite) "Remove ${club.displayValue} from favorites"
+                                                 else "Add ${club.displayValue} to favorites",
+                            tint = if (isFavorite) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }

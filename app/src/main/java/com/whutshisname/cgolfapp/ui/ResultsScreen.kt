@@ -14,13 +14,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.Icon
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -149,6 +154,21 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            item {
+                FilterChip(
+                    selected = uiState.showFavoritesOnly,
+                    onClick = viewModel::toggleFavoritesOnly,
+                    leadingIcon = {
+                        Icon(
+                            imageVector = if (uiState.showFavoritesOnly) Icons.Filled.Star
+                                          else Icons.Outlined.StarBorder,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    label = { Text("Favorites", style = MaterialTheme.typography.labelSmall) }
+                )
+            }
             item { FilterDropdown("Club/Set",   clubSetOpts, filters.clubSet)   { viewModel.setFilter("clubSet",   it) } }
             item { FilterDropdown("Club",       clubOpts,    filters.club)      { viewModel.setFilter("club",      it) } }
             item { FilterDropdown("Loft",       loftOpts,    filters.loft)      { viewModel.setFilter("loft",      it) } }
@@ -239,13 +259,22 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
                     modifier = Modifier.padding(32.dp)
                 ) {
                     Text(
-                        text = "No variants match the active filters.",
+                        text = if (uiState.showFavoritesOnly && !filters.isActive)
+                                   "None of your favorites are in these results."
+                               else "No variants match the active filters.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
-                    TextButton(onClick = viewModel::clearFilters) {
-                        Text("Clear All Filters")
+                    if (uiState.showFavoritesOnly) {
+                        TextButton(onClick = viewModel::toggleFavoritesOnly) {
+                            Text("Show All")
+                        }
+                    }
+                    if (filters.isActive) {
+                        TextButton(onClick = viewModel::clearFilters) {
+                            Text("Clear All Filters")
+                        }
                     }
                 }
             }
