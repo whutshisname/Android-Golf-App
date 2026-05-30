@@ -189,12 +189,12 @@ fun AppScreen(viewModel: MainViewModel = viewModel()) {
 
 @Composable
 private fun SelectTab(uiState: UiState, viewModel: MainViewModel) {
-    val categoryOrder = listOf("drivers", "fairway-woods", "hybrids", "iron-sets", "single-irons", "wedges")
+    val categoryOrder = listOf("drivers", "mini-drivers", "fairway-woods", "hybrids", "iron-sets", "single-irons", "wedges")
     val grouped = remember(uiState.clubTypes) {
         uiState.clubTypes
-            .groupBy { it.cgid }
+            .groupBy { it.category }
             .entries
-            .sortedBy { (cgid, _) -> categoryOrder.indexOf(cgid).takeIf { it >= 0 } ?: Int.MAX_VALUE }
+            .sortedBy { (category, _) -> categoryOrder.indexOf(category).takeIf { it >= 0 } ?: Int.MAX_VALUE }
     }
 
     // Per-category expansion state (ephemeral UI state). Smart default applied once
@@ -208,7 +208,7 @@ private fun SelectTab(uiState: UiState, viewModel: MainViewModel) {
                 clubs.any { it.selectionKey in uiState.selectedKeys }
             }
             if (withSelections.isNotEmpty()) {
-                withSelections.forEach { (cgid, _) -> expandedCategories[cgid] = true }
+                withSelections.forEach { (category, _) -> expandedCategories[category] = true }
             } else {
                 expandedCategories[grouped.first().key] = true
             }
@@ -234,9 +234,9 @@ private fun SelectTab(uiState: UiState, viewModel: MainViewModel) {
             onLoad = { set ->
                 viewModel.loadWatchSet(set)
                 // Expand categories that contain any club from the loaded set
-                grouped.forEach { (cgid, clubs) ->
+                grouped.forEach { (category, clubs) ->
                     if (clubs.any { it.selectionKey in set.selectionKeys }) {
-                        expandedCategories[cgid] = true
+                        expandedCategories[category] = true
                     }
                 }
             },
@@ -248,18 +248,18 @@ private fun SelectTab(uiState: UiState, viewModel: MainViewModel) {
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
-            grouped.forEach { (cgid, clubs) ->
+            grouped.forEach { (category, clubs) ->
                 clubCategorySection(
-                    cgid = cgid,
+                    category = category,
                     label = clubs.first().categoryLabel,
                     clubs = clubs.sortedBy { it.displayValue },
                     selectedKeys = uiState.selectedKeys,
-                    expanded = expandedCategories[cgid] ?: false,
+                    expanded = expandedCategories[category] ?: false,
                     onToggleExpanded = {
-                        expandedCategories[cgid] = !(expandedCategories[cgid] ?: false)
+                        expandedCategories[category] = !(expandedCategories[category] ?: false)
                     },
                     onToggle = viewModel::toggleSelection,
-                    onSelectAll = { selectAll -> viewModel.selectAllInCategory(cgid, selectAll) }
+                    onSelectAll = { selectAll -> viewModel.selectAllInCategory(category, selectAll) }
                 )
             }
         }

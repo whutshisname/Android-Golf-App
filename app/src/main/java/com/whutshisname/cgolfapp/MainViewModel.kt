@@ -153,9 +153,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun selectAllInCategory(cgid: String, selectAll: Boolean) {
+    fun selectAllInCategory(category: String, selectAll: Boolean) {
         _uiState.update { state ->
-            val categoryKeys = state.clubTypes.filter { it.cgid == cgid }
+            val categoryKeys = state.clubTypes.filter { it.category == category }
                 .map { it.selectionKey }.toSet()
             val newKeys = if (selectAll) state.selectedKeys + categoryKeys
                           else state.selectedKeys - categoryKeys
@@ -393,7 +393,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     ClubType(
                         cgid         = obj.getString("cgid"),
                         displayValue = obj.getString("displayValue"),
-                        pid          = obj.getString("pid")
+                        pid          = obj.getString("pid"),
+                        category     = obj.optString("category").takeIf { it.isNotBlank() }
+                            ?: obj.getString("cgid")
                     )
                 }
                 _uiState.update { it.copy(clubTypes = clubs) }

@@ -55,7 +55,7 @@ import com.whutshisname.cgolfapp.model.ClubType
  */
 @OptIn(ExperimentalFoundationApi::class)
 fun LazyListScope.clubCategorySection(
-    cgid: String,
+    category: String,
     label: String,
     clubs: List<ClubType>,
     selectedKeys: Set<String>,
@@ -71,7 +71,7 @@ fun LazyListScope.clubCategorySection(
         else                        -> ToggleableState.Indeterminate
     }
 
-    stickyHeader(key = "header-$cgid") {
+    stickyHeader(key = "header-$category") {
         CategoryHeader(
             label = label,
             clubCount = clubs.size,

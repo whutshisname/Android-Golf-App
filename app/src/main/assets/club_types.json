@@ -8,6 +8,11 @@
   { "cgid": "drivers",      "displayValue": "Rogue ST Max",                     "pid": "drivers-2022-rogue-st-max" },
   { "cgid": "drivers",      "displayValue": "Rogue ST Max LS",                  "pid": "drivers-2022-rogue-st-max-ls" },
   { "cgid": "drivers",      "displayValue": "Rogue ST Triple Diamond LS",       "pid": "drivers-2022-rogue-st-triple-diamond-ls" },
+  { "cgid": "drivers",      "displayValue": "Elyte",                            "pid": "drivers-2025-elyte" },
+  { "cgid": "drivers",      "displayValue": "Elyte Night Mode",                 "pid": "drivers-2025-elyte-night-mode" },
+  { "cgid": "drivers",      "displayValue": "Elyte Triple Diamond",             "pid": "drivers-2025-elyte-td" },
+  { "cgid": "drivers",      "category": "mini-drivers", "displayValue": "Elyte Mini",            "pid": "drivers-2025-elyte-mini" },
+  { "cgid": "drivers-fwoods", "category": "mini-drivers", "displayValue": "Elyte Mini Night Mode", "pid": "drivers-2025-elyte-mini-night-mode" },
   { "cgid": "fairway-woods","displayValue": "Paradym AI Smoke Fast",            "pid": "fwoods-2024-paradym-ai-smoke-max-fast" },
   { "cgid": "fairway-woods","displayValue": "Paradym AI Smoke MAX",             "pid": "fwoods-2024-paradym-ai-smoke-max" },
   { "cgid": "fairway-woods","displayValue": "Paradym AI Smoke MAX D",           "pid": "fwoods-2024-paradym-ai-smoke-max-d" },
@@ -28,5 +33,6 @@
   { "cgid": "wedges",       "displayValue": "JAWS MD5 Platinum Chrome",         "pid": "wedges-2019-md5-jaws-chrome" },
   { "cgid": "wedges",       "displayValue": "JAWS MD5 Tour Grey",               "pid": "wedges-2019-md5-jaws-tour-grey" },
   { "cgid": "wedges",       "displayValue": "Opus Brushed Chrome Wedges",       "pid": "wedges-2024-opus-chrome" },
-  { "cgid": "wedges",       "displayValue": "Opus Platinum Chrome Wedges",      "pid": "wedges-2024-opus-platinum-chrome" }
+  { "cgid": "wedges",       "displayValue": "Opus Platinum Chrome Wedges",      "pid": "wedges-2024-opus-platinum-chrome" },
+  { "cgid": "wedges",       "displayValue": "Opus SP Chrome Wedges",            "pid": "wedges-2025-opus-sp-chrome" }
 ]
