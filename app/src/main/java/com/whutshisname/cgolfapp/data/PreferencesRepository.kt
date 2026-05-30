@@ -5,7 +5,6 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.whutshisname.cgolfapp.ViewMode
 import com.whutshisname.cgolfapp.model.WatchSet
@@ -18,12 +17,8 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 class PreferencesRepository(private val context: Context) {
 
-    private val FAVORITE_PIDS = stringSetPreferencesKey("favorite_pids")
     private val VIEW_MODE_KEY = stringPreferencesKey("view_mode")
     private val WATCH_SETS = stringPreferencesKey("watch_sets")
-
-    val favoritePids: Flow<Set<String>> = context.dataStore.data
-        .map { prefs -> prefs[FAVORITE_PIDS] ?: emptySet() }
 
     val viewMode: Flow<ViewMode> = context.dataStore.data
         .map { prefs ->
@@ -32,13 +27,6 @@ class PreferencesRepository(private val context: Context) {
 
     val watchSets: Flow<List<WatchSet>> = context.dataStore.data
         .map { prefs -> parseWatchSets(prefs[WATCH_SETS]) }
-
-    suspend fun toggleFavorite(pid: String) {
-        context.dataStore.edit { prefs ->
-            val current = prefs[FAVORITE_PIDS] ?: emptySet()
-            prefs[FAVORITE_PIDS] = if (pid in current) current - pid else current + pid
-        }
-    }
 
     suspend fun setViewMode(mode: ViewMode) {
         context.dataStore.edit { prefs -> prefs[VIEW_MODE_KEY] = mode.name }

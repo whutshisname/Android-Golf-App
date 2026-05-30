@@ -14,17 +14,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TableRows
 import androidx.compose.material.icons.filled.ViewAgenda
-import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -172,21 +169,6 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item {
-                FilterChip(
-                    selected = uiState.showFavoritesOnly,
-                    onClick = viewModel::toggleFavoritesOnly,
-                    leadingIcon = {
-                        Icon(
-                            imageVector = if (uiState.showFavoritesOnly) Icons.Filled.Star
-                                          else Icons.Outlined.StarBorder,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    },
-                    label = { Text("Favorites", style = MaterialTheme.typography.labelSmall) }
-                )
-            }
             item { FilterDropdown("Club/Set",   clubSetOpts, filters.clubSet)   { viewModel.setFilter("clubSet",   it) } }
             item { FilterDropdown("Club",       clubOpts,    filters.club)      { viewModel.setFilter("club",      it) } }
             item { FilterDropdown("Loft",       loftOpts,    filters.loft)      { viewModel.setFilter("loft",      it) } }
@@ -279,18 +261,11 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
                     modifier = Modifier.padding(32.dp)
                 ) {
                     Text(
-                        text = if (uiState.showFavoritesOnly && !filters.isActive)
-                                   "None of your favorites are in these results."
-                               else "No variants match the active filters.",
+                        text = "No variants match the active filters.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
-                    if (uiState.showFavoritesOnly) {
-                        TextButton(onClick = viewModel::toggleFavoritesOnly) {
-                            Text("Show All")
-                        }
-                    }
                     if (filters.isActive) {
                         TextButton(onClick = viewModel::clearFilters) {
                             Text("Clear All Filters")
@@ -333,8 +308,6 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
     uiState.selectedRow?.let { row ->
         VariantDetailSheet(
             row = row,
-            isFavorite = row.clubPid in uiState.favoritePids,
-            onToggleFavorite = { viewModel.toggleFavorite(row.clubPid) },
             onDismiss = { viewModel.selectRow(null) }
         )
     }
@@ -346,31 +319,18 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
 @Composable
 private fun VariantDetailSheet(
     row: VariantRow,
-    isFavorite: Boolean,
-    onToggleFavorite: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
 
-            // Title + favorite toggle
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = row.productName,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = onToggleFavorite) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                        tint = if (isFavorite) MaterialTheme.colorScheme.primary
-                               else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+            Text(
+                text = row.productName,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(Modifier.height(12.dp))
 

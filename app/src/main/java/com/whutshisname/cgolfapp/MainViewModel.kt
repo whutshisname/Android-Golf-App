@@ -67,8 +67,6 @@ data class UiState(
     val sortOrder: SortOrder = SortOrder.NONE,
     val searchQuery: String = "",
     val viewMode: ViewMode = ViewMode.TABLE,
-    val favoritePids: Set<String> = emptySet(),
-    val showFavoritesOnly: Boolean = false,
     val watchSets: List<WatchSet> = emptyList(),
     val selectedRow: VariantRow? = null,
     val jsonExpanded: Boolean = false,
@@ -93,20 +91,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // ── Persistence (DataStore) ───────────────────────────────────────────────
 
     private fun collectPreferences() {
-        viewModelScope.launch {
-            prefsRepo.favoritePids.collect { pids ->
-                // Recompute filteredRows if favorites filter is active
-                _uiState.update { state ->
-                    state.copy(
-                        favoritePids = pids,
-                        filteredRows = applyFiltersAndSort(
-                            state.variantRows, state.filters, state.sortOrder,
-                            state.searchQuery, pids, state.showFavoritesOnly
-                        )
-                    )
-                }
-            }
-        }
         viewModelScope.launch {
             prefsRepo.viewMode.collect { mode ->
                 _uiState.update { it.copy(viewMode = mode) }
@@ -135,29 +119,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { prefsRepo.deleteWatchSet(name) }
     }
 
-    fun toggleFavorite(pid: String) {
-        viewModelScope.launch { prefsRepo.toggleFavorite(pid) }
-    }
-
     fun setViewMode(mode: ViewMode) {
         viewModelScope.launch { prefsRepo.setViewMode(mode) }
     }
 
     fun selectRow(row: VariantRow?) {
         _uiState.update { it.copy(selectedRow = row) }
-    }
-
-    fun toggleFavoritesOnly() {
-        _uiState.update { state ->
-            val newVal = !state.showFavoritesOnly
-            state.copy(
-                showFavoritesOnly = newVal,
-                filteredRows = applyFiltersAndSort(
-                    state.variantRows, state.filters, state.sortOrder,
-                    state.searchQuery, state.favoritePids, newVal
-                )
-            )
-        }
     }
 
     // ── WebView ───────────────────────────────────────────────────────────────
@@ -211,8 +178,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 filteredRows = emptyList(),
                 filters = VariantFilters(),
                 sortOrder = SortOrder.NONE,
-                searchQuery = "",
-                showFavoritesOnly = false
+                searchQuery = ""
             )
         }
 
@@ -231,7 +197,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     isLoading = false,
                     fetchProgress = "",
                     variantRows = rows,
-                    filteredRows = applyFiltersAndSort(rows, currentState.filters, currentState.sortOrder, currentState.searchQuery, currentState.favoritePids, currentState.showFavoritesOnly),
+                    filteredRows = applyFiltersAndSort(rows, currentState.filters, currentState.sortOrder, currentState.searchQuery),
                     errorMessage = errorMsg
                 )
             }
@@ -255,7 +221,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             state.copy(
                 filters = newFilters,
-                filteredRows = applyFiltersAndSort(state.variantRows, newFilters, state.sortOrder, state.searchQuery, state.favoritePids, state.showFavoritesOnly)
+                filteredRows = applyFiltersAndSort(state.variantRows, newFilters, state.sortOrder, state.searchQuery)
             )
         }
     }
@@ -264,7 +230,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { state ->
             state.copy(
                 sortOrder = order,
-                filteredRows = applyFiltersAndSort(state.variantRows, state.filters, order, state.searchQuery, state.favoritePids, state.showFavoritesOnly)
+                filteredRows = applyFiltersAndSort(state.variantRows, state.filters, order, state.searchQuery)
             )
         }
     }
@@ -273,7 +239,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { state ->
             state.copy(
                 filters = VariantFilters(),
-                filteredRows = applyFiltersAndSort(state.variantRows, VariantFilters(), state.sortOrder, state.searchQuery, state.favoritePids, state.showFavoritesOnly)
+                filteredRows = applyFiltersAndSort(state.variantRows, VariantFilters(), state.sortOrder, state.searchQuery)
             )
         }
     }
@@ -286,9 +252,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         rows: List<VariantRow>,
         filters: VariantFilters,
         sortOrder: SortOrder,
-        searchQuery: String,
-        favoritePids: Set<String> = emptySet(),
-        showFavoritesOnly: Boolean = false
+        searchQuery: String
     ): List<VariantRow> {
         var result = rows.filter { row ->
             (filters.clubSet   == null || row.clubSet   == filters.clubSet) &&
@@ -296,10 +260,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             (filters.loft      == null || row.loft      == filters.loft) &&
             (filters.shaftType == null || row.shaftType == filters.shaftType) &&
             (filters.shaftFlex == null || row.shaftFlex == filters.shaftFlex)
-        }
-
-        if (showFavoritesOnly) {
-            result = result.filter { it.clubPid in favoritePids }
         }
 
         if (searchQuery.isNotBlank()) {
