@@ -22,10 +22,8 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 
 ## Architecture
 
-Single-activity Jetpack Compose app. Currently a POC in one file (`MainActivity.kt`).
-Planned full port from `D:\dev\golf-scraper` (Next.js) will add club selection UI,
-multi-fetch, a filterable results table, and a raw JSON viewer — see that repo for
-the reference feature set and data shapes.
+Single-activity Jetpack Compose app with a `MainViewModel` holding all state via `StateFlow`.
+Two tabs: **Select** (club selection) and **Results** (filterable variant table).
 
 ### The Cloudflare Trick — critical, do not change
 
@@ -47,16 +45,16 @@ from a different HTTP stack.
 ### evaluateJavascript() sequencing
 
 The WebView has one JS context. Concurrent `evaluateJavascript()` calls interleave
-unpredictably. When fetching multiple clubs, use a `Mutex` or `Channel` in the
-ViewModel to ensure requests are sequential.
+unpredictably. Multi-club fetches are serialised with a `Mutex` +
+`suspendCancellableCoroutine` in `MainViewModel.fetchOneSuspend()`.
 
 ### JsBridge thread safety
 
 `JsBridge.postResult()` is called by the JS engine on a background thread.
-Always use `Handler(Looper.getMainLooper()).post { ... }` inside it before
-updating any Compose state.
+`Handler(Looper.getMainLooper()).post { ... }` is used inside it to safely resume
+the suspended coroutine on the main thread.
 
-## Key Constants (MainActivity.kt)
+## Key Constants (MainViewModel.kt)
 
 - `SITE_URL`   = `https://www.callawaygolfpreowned.com/`
 - `API_URL`    = `https://www.callawaygolfpreowned.com/on/demandware.store/Sites-CGPO5-Site/default/Product-VariantData`
@@ -66,12 +64,30 @@ updating any Compose state.
 
 GET `{API_URL}?pid={pid}&cgid={cgid}&format=json`
 
-Each club is identified by a `pid` (product ID) and `cgid` (category ID). The
-reference list of all known clubs lives in `D:\dev\golf-scraper\src\data\clubTypes.json`
-(31 clubs across 6 categories: drivers, fairway-woods, hybrids, wedges, iron-sets,
-single-irons). This will be copied to `app/src/main/assets/club_types.json` when
-the full port is implemented.
+Each club is identified by a `pid` (product ID) and `cgid` (category ID).
+The bundled club list is `app/src/main/assets/club_types.json` (30 clubs, 6 categories).
+To add new models, edit that file directly.
 
 Each response has a `variants` array. Each variant is an array of `{label, value}`
 objects. Price fields (Outlet, Like New, Very Good, Good, Average) have
 `value = [sku, "$XX.XX", stock, url]` or the string `"-"`.
+
+## Planned / Future Work
+
+### Refresh Clubs (Settings menu)
+The club list in `assets/club_types.json` is currently updated manually.
+The planned feature is a **Settings screen** with a "Refresh Clubs" option that
+uses the existing live WebView session to scrape Callaway's category pages and
+auto-update the club list in-app — no code change or app update needed.
+
+Implementation notes:
+- Cloudflare blocks all standard HTTP clients (confirmed — HTTP 429 on WebFetch).
+  The scraper must use the same `evaluateJavascript()` + `JsBridge` pattern as
+  variant fetching. Direct OkHttp/Retrofit calls to category pages will not work.
+- Category page URLs follow the pattern `callawaygolfpreowned.com/{cgid}`
+  (e.g. `/drivers`, `/single-irons`). Product IDs and display names can be
+  extracted from the page's JSON-LD or Demandware product tile markup.
+- Scraped results should be written to `filesDir/club_types_scraped.json` and
+  loaded in preference to the bundled asset on subsequent launches.
+- `loadClubTypes()` in `MainViewModel` is the right place to add the
+  scraped-file-first loading logic. See the `// TODO` comment there.

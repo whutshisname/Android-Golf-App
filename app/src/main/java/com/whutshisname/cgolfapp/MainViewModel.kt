@@ -250,6 +250,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return rows
     }
 
+    // TODO: Settings screen — "Refresh Clubs" option
+    //   Use evaluateJavascript() + JsBridge to scrape Callaway category pages
+    //   (same pattern as variant fetching — Cloudflare blocks all other HTTP clients).
+    //   Write scraped results to filesDir/club_types_scraped.json and prefer that
+    //   file over the bundled asset on subsequent launches. Load order:
+    //   1. filesDir/club_types_scraped.json  (from last successful refresh)
+    //   2. assets/club_types.json            (bundled fallback)
     private fun loadClubTypes() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
