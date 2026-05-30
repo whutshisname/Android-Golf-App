@@ -6,6 +6,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.whutshisname.cgolfapp.model.ClubType
 import com.whutshisname.cgolfapp.model.VariantRow
+import com.whutshisname.cgolfapp.model.availableConditionCount
+import com.whutshisname.cgolfapp.model.bestPrice
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +27,15 @@ const val API_URL =
     "https://www.callawaygolfpreowned.com/on/demandware.store/Sites-CGPO5-Site/default/Product-VariantData"
 const val USER_AGENT =
     "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.6422.165 Mobile Safari/537.36"
+
+enum class SortOrder(val label: String) {
+    NONE("Default"),
+    LOWEST_PRICE("Lowest Price"),
+    HIGHEST_PRICE("Highest Price"),
+    CLUB_NAME("Club Name"),
+    LOFT("Loft"),
+    MOST_INVENTORY("Most Inventory")
+}
 
 data class FetchedResult(val club: ClubType, val rawJson: String)
 
@@ -49,6 +60,8 @@ data class UiState(
     val variantRows: List<VariantRow> = emptyList(),
     val filteredRows: List<VariantRow> = emptyList(),
     val filters: VariantFilters = VariantFilters(),
+    val sortOrder: SortOrder = SortOrder.NONE,
+    val searchQuery: String = "",
     val jsonExpanded: Boolean = false,
     val errorMessage: String? = null
 )
@@ -107,7 +120,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (selected.isEmpty()) return
 
-        _uiState.update { it.copy(isLoading = true, fetchedResults = emptyList(), variantRows = emptyList(), filteredRows = emptyList(), filters = VariantFilters()) }
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                fetchedResults = emptyList(),
+                variantRows = emptyList(),
+                filteredRows = emptyList(),
+                filters = VariantFilters(),
+                sortOrder = SortOrder.NONE,
+                searchQuery = ""
+            )
+        }
 
         viewModelScope.launch {
             selected.forEachIndexed { i, club ->
@@ -118,7 +141,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val results = _uiState.value.fetchedResults
             val rows = parseVariantRows(results)
             val errorMsg = buildErrorMessage(results, rows, selected.size)
-            _uiState.update { it.copy(isLoading = false, fetchProgress = "", variantRows = rows, filteredRows = rows, errorMessage = errorMsg) }
+            val currentState = _uiState.value
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    fetchProgress = "",
+                    variantRows = rows,
+                    filteredRows = applyFiltersAndSort(rows, currentState.filters, currentState.sortOrder, currentState.searchQuery),
+                    errorMessage = errorMsg
+                )
+            }
         }
     }
 
@@ -126,10 +158,86 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(errorMessage = null) }
     }
 
-    private fun buildErrorMessage(results: List<FetchedResult>, rows: List<VariantRow>, totalRequested: Int): String? {
-        val failures = results.count { r ->
-            !r.rawJson.startsWith("HTTP 200")
+    fun setFilter(field: String, value: String?) {
+        _uiState.update { state ->
+            val f = state.filters
+            val newFilters = when (field) {
+                "clubSet"   -> f.copy(clubSet = value)
+                "club"      -> f.copy(club = value)
+                "loft"      -> f.copy(loft = value)
+                "shaftType" -> f.copy(shaftType = value)
+                "shaftFlex" -> f.copy(shaftFlex = value)
+                else -> f
+            }
+            state.copy(
+                filters = newFilters,
+                filteredRows = applyFiltersAndSort(state.variantRows, newFilters, state.sortOrder, state.searchQuery)
+            )
         }
+    }
+
+    fun clearFilters() {
+        _uiState.update { state ->
+            state.copy(
+                filters = VariantFilters(),
+                filteredRows = applyFiltersAndSort(state.variantRows, VariantFilters(), state.sortOrder, state.searchQuery)
+            )
+        }
+    }
+
+    fun toggleJsonExpanded() {
+        _uiState.update { it.copy(jsonExpanded = !it.jsonExpanded) }
+    }
+
+    private fun applyFiltersAndSort(
+        rows: List<VariantRow>,
+        filters: VariantFilters,
+        sortOrder: SortOrder,
+        searchQuery: String
+    ): List<VariantRow> {
+        var result = rows.filter { row ->
+            (filters.clubSet   == null || row.clubSet   == filters.clubSet) &&
+            (filters.club      == null || row.club      == filters.club) &&
+            (filters.loft      == null || row.loft      == filters.loft) &&
+            (filters.shaftType == null || row.shaftType == filters.shaftType) &&
+            (filters.shaftFlex == null || row.shaftFlex == filters.shaftFlex)
+        }
+
+        if (searchQuery.isNotBlank()) {
+            val q = searchQuery.trim().lowercase()
+            result = result.filter { row ->
+                row.productName.lowercase().contains(q) ||
+                row.loft.lowercase().contains(q) ||
+                row.shaftType.lowercase().contains(q) ||
+                row.shaftFlex.lowercase().contains(q) ||
+                row.clubSet.lowercase().contains(q) ||
+                row.club.lowercase().contains(q)
+            }
+        }
+
+        return when (sortOrder) {
+            SortOrder.NONE           -> result
+            SortOrder.LOWEST_PRICE   -> result.sortedBy { it.bestPrice() ?: Double.MAX_VALUE }
+            SortOrder.HIGHEST_PRICE  -> result.sortedByDescending { it.bestPrice() ?: -1.0 }
+            SortOrder.CLUB_NAME      -> result.sortedBy { it.productName }
+            SortOrder.LOFT           -> result.sortedBy { it.loft.trimEnd('°').toDoubleOrNull() ?: 0.0 }
+            SortOrder.MOST_INVENTORY -> result.sortedByDescending { it.availableConditionCount() }
+        }
+    }
+
+    private suspend fun fetchOneSuspend(pid: String, cgid: String): String =
+        fetchMutex.withLock {
+            suspendCancellableCoroutine { cont ->
+                pendingContinuation = cont
+                cont.invokeOnCancellation { pendingContinuation = null }
+                val url = "$API_URL?pid=$pid&cgid=$cgid&format=json"
+                webView?.evaluateJavascript(buildFetchJs(url), null)
+                    ?: cont.resume("Error: WebView not ready")
+            }
+        }
+
+    private fun buildErrorMessage(results: List<FetchedResult>, rows: List<VariantRow>, totalRequested: Int): String? {
+        val failures = results.count { !it.rawJson.startsWith("HTTP 200") }
         val firstFailRaw = results.firstOrNull { !it.rawJson.startsWith("HTTP 200") }?.rawJson ?: ""
         return when {
             failures == totalRequested -> when {
@@ -145,55 +253,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setFilter(field: String, value: String?) {
-        _uiState.update { state ->
-            val f = state.filters
-            val newFilters = when (field) {
-                "clubSet"   -> f.copy(clubSet = value)
-                "club"      -> f.copy(club = value)
-                "loft"      -> f.copy(loft = value)
-                "shaftType" -> f.copy(shaftType = value)
-                "shaftFlex" -> f.copy(shaftFlex = value)
-                else -> f
-            }
-            state.copy(filters = newFilters, filteredRows = applyFilters(state.variantRows, newFilters))
-        }
-    }
-
-    fun clearFilters() {
-        _uiState.update { state ->
-            state.copy(filters = VariantFilters(), filteredRows = state.variantRows)
-        }
-    }
-
-    fun toggleJsonExpanded() {
-        _uiState.update { it.copy(jsonExpanded = !it.jsonExpanded) }
-    }
-
-    private suspend fun fetchOneSuspend(pid: String, cgid: String): String =
-        fetchMutex.withLock {
-            suspendCancellableCoroutine { cont ->
-                pendingContinuation = cont
-                cont.invokeOnCancellation { pendingContinuation = null }
-                val url = "$API_URL?pid=$pid&cgid=$cgid&format=json"
-                webView?.evaluateJavascript(buildFetchJs(url), null)
-                    ?: cont.resume("Error: WebView not ready")
-            }
-        }
-
-    private fun applyFilters(rows: List<VariantRow>, f: VariantFilters) = rows.filter { row ->
-        (f.clubSet   == null || row.clubSet   == f.clubSet) &&
-        (f.club      == null || row.club      == f.club) &&
-        (f.loft      == null || row.loft      == f.loft) &&
-        (f.shaftType == null || row.shaftType == f.shaftType) &&
-        (f.shaftFlex == null || row.shaftFlex == f.shaftFlex)
-    }
-
     private fun parseVariantRows(results: List<FetchedResult>): List<VariantRow> {
         val rows = mutableListOf<VariantRow>()
         for (result in results) {
-            val body = result.rawJson.substringAfter("\n\n", missingDelimiterValue = "")
-                .trim()
+            val body = result.rawJson.substringAfter("\n\n", missingDelimiterValue = "").trim()
             if (body.isEmpty()) continue
 
             val variants: JSONArray = try {
@@ -224,26 +287,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
-                val (outP, outU)  = price("Outlet")
-                val (lnP,  lnU)   = price("Like New")
-                val (vgP,  vgU)   = price("Very Good")
-                val (gdP,  gdU)   = price("Good")
-                val (avP,  avU)   = price("Average")
+                val (outP, outU) = price("Outlet")
+                val (lnP,  lnU)  = price("Like New")
+                val (vgP,  vgU)  = price("Very Good")
+                val (gdP,  gdU)  = price("Good")
+                val (avP,  avU)  = price("Average")
 
                 rows.add(VariantRow(
-                    id             = "${result.club.pid}-$i",
-                    productName    = result.club.displayValue,
-                    clubSet        = str("Club/Set"),
-                    club           = str("Club"),
-                    loft           = str("Loft"),
-                    shaftType      = str("Shaft Type"),
-                    shaftFlex      = str("Shaft Flex"),
-                    length         = str("Length"),
-                    outletPrice    = outP, outletUrl   = outU,
-                    likeNewPrice   = lnP,  likeNewUrl  = lnU,
-                    veryGoodPrice  = vgP,  veryGoodUrl = vgU,
-                    goodPrice      = gdP,  goodUrl     = gdU,
-                    averagePrice   = avP,  averageUrl  = avU
+                    id            = "${result.club.pid}-$i",
+                    clubPid       = result.club.pid,
+                    productName   = result.club.displayValue,
+                    clubSet       = str("Club/Set"),
+                    club          = str("Club"),
+                    loft          = str("Loft"),
+                    shaftType     = str("Shaft Type"),
+                    shaftFlex     = str("Shaft Flex"),
+                    length        = str("Length"),
+                    outletPrice   = outP, outletUrl   = outU,
+                    likeNewPrice  = lnP,  likeNewUrl  = lnU,
+                    veryGoodPrice = vgP,  veryGoodUrl = vgU,
+                    goodPrice     = gdP,  goodUrl     = gdU,
+                    averagePrice  = avP,  averageUrl  = avU
                 ))
             }
         }
