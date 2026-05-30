@@ -29,8 +29,10 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -299,7 +301,7 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
         } else if (uiState.viewMode == ViewMode.TABLE) {
             LazyColumn(modifier = Modifier.weight(1f)) {
                 itemsIndexed(uiState.filteredRows, key = { _, row -> row.id }) { index, row ->
-                    TableRow(row, hScroll, isEven = index % 2 == 0)
+                    TableRow(row, hScroll, isEven = index % 2 == 0) { viewModel.selectRow(row) }
                 }
             }
         } else {
@@ -309,7 +311,7 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 itemsIndexed(uiState.filteredRows, key = { _, row -> row.id }) { _, row ->
-                    VariantCard(row)
+                    VariantCard(row) { viewModel.selectRow(row) }
                 }
             }
         }
@@ -326,14 +328,113 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
             )
         }
     }
+
+    // ── Product detail bottom sheet ───────────────────────────────────────────
+    uiState.selectedRow?.let { row ->
+        VariantDetailSheet(
+            row = row,
+            isFavorite = row.clubPid in uiState.favoritePids,
+            onToggleFavorite = { viewModel.toggleFavorite(row.clubPid) },
+            onDismiss = { viewModel.selectRow(null) }
+        )
+    }
+}
+
+// ── Product detail bottom sheet ──────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VariantDetailSheet(
+    row: VariantRow,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val uriHandler = LocalUriHandler.current
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 32.dp)) {
+
+            // Title + favorite toggle
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = row.productName,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onToggleFavorite) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                        tint = if (isFavorite) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Specs
+            DetailRow("Club/Set",  row.clubSet)
+            DetailRow("Club",      row.club)
+            DetailRow("Loft",      row.loft)
+            DetailRow("Shaft Type", row.shaftType)
+            DetailRow("Shaft Flex", row.shaftFlex)
+            DetailRow("Length",    row.length)
+
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = "Pricing by Condition",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(4.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Spacer(Modifier.height(8.dp))
+
+            PriceLine("Outlet",    row.outletPrice,   row.outletUrl)   { uriHandler.openUri(it) }
+            PriceLine("Like New",  row.likeNewPrice,  row.likeNewUrl)  { uriHandler.openUri(it) }
+            PriceLine("Very Good", row.veryGoodPrice, row.veryGoodUrl) { uriHandler.openUri(it) }
+            PriceLine("Good",      row.goodPrice,     row.goodUrl)     { uriHandler.openUri(it) }
+            PriceLine("Average",   row.averagePrice,  row.averageUrl)  { uriHandler.openUri(it) }
+
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Tap a price to open that listing on Callaway Preowned.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    if (value.isBlank()) return
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+    }
 }
 
 // ── Card view — phone-optimized result card ──────────────────────────────────
 
 @Composable
-private fun VariantCard(row: VariantRow) {
+private fun VariantCard(row: VariantRow, onClick: () -> Unit) {
     val uriHandler = LocalUriHandler.current
     Card(
+        onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
     ) {
@@ -418,7 +519,7 @@ private fun ActiveFilterChip(label: String, onDismiss: () -> Unit) {
 // ── Table composables (unchanged) ────────────────────────────────────────────
 
 @Composable
-private fun TableRow(row: VariantRow, hScroll: ScrollState, isEven: Boolean) {
+private fun TableRow(row: VariantRow, hScroll: ScrollState, isEven: Boolean, onClick: () -> Unit) {
     val uriHandler = LocalUriHandler.current
     val bgColor = if (isEven) MaterialTheme.colorScheme.surface
                   else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -426,6 +527,7 @@ private fun TableRow(row: VariantRow, hScroll: ScrollState, isEven: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .background(bgColor)
+            .clickable { onClick() }
             .horizontalScroll(hScroll)
             .padding(vertical = 6.dp)
     ) {
