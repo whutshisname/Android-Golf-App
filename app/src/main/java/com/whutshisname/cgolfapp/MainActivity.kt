@@ -50,6 +50,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.whutshisname.cgolfapp.ui.SaveWatchSetDialog
+import com.whutshisname.cgolfapp.ui.WatchSetsBar
 import com.whutshisname.cgolfapp.ui.clubCategorySection
 import com.whutshisname.cgolfapp.ui.ResultsScreen
 import com.whutshisname.cgolfapp.ui.theme.MyApplicationTheme
@@ -214,9 +216,34 @@ private fun SelectTab(uiState: UiState, viewModel: MainViewModel) {
         }
     }
 
+    var showSaveDialog by remember { mutableStateOf(false) }
+    if (showSaveDialog) {
+        SaveWatchSetDialog(
+            selectionCount = uiState.selectedKeys.size,
+            onConfirm = { name -> viewModel.saveWatchSet(name); showSaveDialog = false },
+            onDismiss = { showSaveDialog = false }
+        )
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp)
     ) {
+        WatchSetsBar(
+            watchSets = uiState.watchSets,
+            canSave = uiState.selectedKeys.isNotEmpty(),
+            onLoad = { set ->
+                viewModel.loadWatchSet(set)
+                // Expand categories that contain any club from the loaded set
+                grouped.forEach { (cgid, clubs) ->
+                    if (clubs.any { it.selectionKey in set.selectionKeys }) {
+                        expandedCategories[cgid] = true
+                    }
+                }
+            },
+            onDelete = viewModel::deleteWatchSet,
+            onSaveClick = { showSaveDialog = true }
+        )
+
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(vertical = 8.dp)
@@ -227,14 +254,12 @@ private fun SelectTab(uiState: UiState, viewModel: MainViewModel) {
                     label = clubs.first().categoryLabel,
                     clubs = clubs.sortedBy { it.displayValue },
                     selectedKeys = uiState.selectedKeys,
-                    favoritePids = uiState.favoritePids,
                     expanded = expandedCategories[cgid] ?: false,
                     onToggleExpanded = {
                         expandedCategories[cgid] = !(expandedCategories[cgid] ?: false)
                     },
                     onToggle = viewModel::toggleSelection,
-                    onSelectAll = { selectAll -> viewModel.selectAllInCategory(cgid, selectAll) },
-                    onToggleFavorite = viewModel::toggleFavorite
+                    onSelectAll = { selectAll -> viewModel.selectAllInCategory(cgid, selectAll) }
                 )
             }
         }

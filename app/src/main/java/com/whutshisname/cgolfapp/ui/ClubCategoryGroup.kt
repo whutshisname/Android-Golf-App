@@ -24,12 +24,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -62,12 +59,10 @@ fun LazyListScope.clubCategorySection(
     label: String,
     clubs: List<ClubType>,
     selectedKeys: Set<String>,
-    favoritePids: Set<String>,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
     onToggle: (key: String) -> Unit,
-    onSelectAll: (selectAll: Boolean) -> Unit,
-    onToggleFavorite: (pid: String) -> Unit
+    onSelectAll: (selectAll: Boolean) -> Unit
 ) {
     val selectedCount = clubs.count { it.selectionKey in selectedKeys }
     val selectAllState = when {
@@ -93,9 +88,7 @@ fun LazyListScope.clubCategorySection(
             ClubCard(
                 club = club,
                 isSelected = club.selectionKey in selectedKeys,
-                isFavorite = club.pid in favoritePids,
                 onToggle = { onToggle(club.selectionKey) },
-                onToggleFavorite = { onToggleFavorite(club.pid) },
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 3.dp)
             )
         }
@@ -175,9 +168,7 @@ private fun CategoryHeader(
 private fun ClubCard(
     club: ClubType,
     isSelected: Boolean,
-    isFavorite: Boolean,
     onToggle: () -> Unit,
-    onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Lightweight selection motion — color + border animate between states
@@ -211,7 +202,7 @@ private fun ClubCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 56.dp)
-                .padding(start = 14.dp, end = 4.dp),
+                .padding(start = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             SelectionIndicator(isSelected = isSelected)
@@ -224,20 +215,8 @@ private fun ClubCard(
                         else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 12.dp, top = 12.dp, bottom = 12.dp)
+                    .padding(start = 12.dp, top = 14.dp, bottom = 14.dp, end = 14.dp)
             )
-
-            // Favorite is a separate, secondary action — its own button consumes the
-            // tap so it never triggers card selection.
-            IconButton(onClick = onToggleFavorite) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                    contentDescription = if (isFavorite) "Remove ${club.displayValue} from favorites"
-                                         else "Add ${club.displayValue} to favorites",
-                    tint = if (isFavorite) MaterialTheme.colorScheme.primary
-                           else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
     }
 }

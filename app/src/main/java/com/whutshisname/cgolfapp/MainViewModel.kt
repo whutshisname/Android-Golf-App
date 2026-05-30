@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.whutshisname.cgolfapp.data.PreferencesRepository
 import com.whutshisname.cgolfapp.model.ClubType
 import com.whutshisname.cgolfapp.model.VariantRow
+import com.whutshisname.cgolfapp.model.WatchSet
 import com.whutshisname.cgolfapp.model.availableConditionCount
 import com.whutshisname.cgolfapp.model.bestPrice
 import kotlinx.coroutines.CancellableContinuation
@@ -68,6 +69,7 @@ data class UiState(
     val viewMode: ViewMode = ViewMode.TABLE,
     val favoritePids: Set<String> = emptySet(),
     val showFavoritesOnly: Boolean = false,
+    val watchSets: List<WatchSet> = emptyList(),
     val selectedRow: VariantRow? = null,
     val jsonExpanded: Boolean = false,
     val errorMessage: String? = null
@@ -110,6 +112,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.update { it.copy(viewMode = mode) }
             }
         }
+        viewModelScope.launch {
+            prefsRepo.watchSets.collect { sets ->
+                _uiState.update { it.copy(watchSets = sets) }
+            }
+        }
+    }
+
+    // ── Watch Sets ────────────────────────────────────────────────────────────
+
+    fun saveWatchSet(name: String) {
+        val keys = _uiState.value.selectedKeys
+        if (name.isBlank() || keys.isEmpty()) return
+        viewModelScope.launch { prefsRepo.saveWatchSet(name.trim(), keys) }
+    }
+
+    fun loadWatchSet(set: WatchSet) {
+        _uiState.update { it.copy(selectedKeys = set.selectionKeys) }
+    }
+
+    fun deleteWatchSet(name: String) {
+        viewModelScope.launch { prefsRepo.deleteWatchSet(name) }
     }
 
     fun toggleFavorite(pid: String) {
