@@ -6,6 +6,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Image
@@ -149,6 +150,13 @@ fun AppScreen(viewModel: MainViewModel = viewModel()) {
             snackbarHostState.showSnackbar(message = msg, actionLabel = "Dismiss")
             viewModel.dismissError()
         }
+    }
+
+    // On the Results tab, Back returns to Select (previous workflow step) instead
+    // of exiting. On Select the handler is disabled, so Back behaves normally.
+    // Switching pages preserves all Select state (selection, expansion, Watch Sets).
+    BackHandler(enabled = pagerState.currentPage == 1) {
+        scope.launch { pagerState.animateScrollToPage(0) }
     }
 
     Scaffold(
