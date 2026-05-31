@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.SubdirectoryArrowRight
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -46,6 +47,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.whutshisname.cgolfapp.model.ClubType
 
 /**
@@ -122,71 +124,77 @@ private fun CategoryHeader(
                    else "$clubCount clubs"
 
     // Subcategory headers sit on a lower elevation and indent, so they read as
-    // nested beneath their parent category rather than as a peer.
+    // nested beneath their parent category rather than as a peer. A subtle bottom
+    // divider separates the (opaque) sticky header from the club cards.
     Surface(
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = if (isSubcategory) 1.dp else 3.dp,
+        tonalElevation = if (isSubcategory) 2.dp else 4.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = if (isSubcategory) 48.dp else 56.dp)
-                .clickable(
-                    onClickLabel = if (expanded) "Collapse $label" else "Expand $label"
-                ) { onToggleExpanded() }
-                .padding(start = if (isSubcategory) 20.dp else 8.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (isSubcategory) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = if (isSubcategory) 52.dp else 60.dp)
+                    .clickable(
+                        onClickLabel = if (expanded) "Collapse $label" else "Expand $label"
+                    ) { onToggleExpanded() }
+                    .padding(start = if (isSubcategory) 20.dp else 8.dp, end = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (isSubcategory) {
+                    Icon(
+                        imageVector = Icons.Filled.SubdirectoryArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(2.dp))
+                }
                 Icon(
-                    imageVector = Icons.Filled.SubdirectoryArrowRight,
+                    imageVector = Icons.Filled.KeyboardArrowDown,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp)
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.rotate(chevronRotation)
                 )
-                Spacer(Modifier.width(2.dp))
-            }
-            Icon(
-                imageVector = Icons.Filled.KeyboardArrowDown,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.rotate(chevronRotation)
-            )
-            Spacer(Modifier.width(6.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                // Breadcrumb overline communicates parentage, e.g. "DRIVERS"
-                if (isSubcategory && parentLabel != null) {
+                Spacer(Modifier.width(6.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    // Breadcrumb overline communicates parentage, e.g. "DRIVERS"
+                    if (isSubcategory && parentLabel != null) {
+                        Text(
+                            text = parentLabel.uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    // Category title — the strongest element in the section: larger,
+                    // bold, and in the brand accent color.
                     Text(
-                        text = parentLabel.uppercase(),
+                        text = label,
+                        style = if (isSubcategory) MaterialTheme.typography.titleMedium
+                                else MaterialTheme.typography.titleLarge,
+                        fontSize = if (isSubcategory) 17.sp else 20.sp,
+                        fontWeight = if (isSubcategory) FontWeight.SemiBold else FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = subtitle,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        fontWeight = if (selectedCount > 0) FontWeight.Medium else FontWeight.Normal,
+                        color = if (selectedCount > 0) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Text(
-                    text = label,
-                    style = if (isSubcategory) MaterialTheme.typography.titleSmall
-                            else MaterialTheme.typography.titleMedium,
-                    fontWeight = if (isSubcategory) FontWeight.SemiBold else FontWeight.Bold,
-                    color = if (isSubcategory) MaterialTheme.colorScheme.onSurface
-                            else MaterialTheme.colorScheme.primary
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (selectedCount > 0) FontWeight.Medium else FontWeight.Normal,
-                    color = if (selectedCount > 0) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
+                // Category-level select-all — its own control, doesn't toggle expansion
+                TriStateCheckbox(
+                    state = selectAllState,
+                    onClick = onSelectAll,
+                    modifier = Modifier.semantics {
+                        contentDescription = "Select all $label"
+                    }
                 )
             }
-            // Category-level select-all — its own control, doesn't toggle expansion
-            TriStateCheckbox(
-                state = selectAllState,
-                onClick = onSelectAll,
-                modifier = Modifier.semantics {
-                    contentDescription = "Select all $label"
-                }
-            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }
@@ -239,7 +247,7 @@ private fun ClubCard(
             Text(
                 text = club.displayValue,
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                 color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
                         else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
