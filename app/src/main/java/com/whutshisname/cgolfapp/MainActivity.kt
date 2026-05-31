@@ -5,8 +5,10 @@ import android.os.Bundle
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,14 +19,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.Button
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
@@ -33,7 +36,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -45,12 +47,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.whutshisname.cgolfapp.ui.theme.BrandOrange
+import com.whutshisname.cgolfapp.ui.theme.HeaderBlack
+import com.whutshisname.cgolfapp.ui.theme.HeaderOnDark
 import com.whutshisname.cgolfapp.ui.SaveWatchSetDialog
 import com.whutshisname.cgolfapp.ui.WatchSetsBar
 import com.whutshisname.cgolfapp.ui.clubCategorySection
@@ -70,12 +78,54 @@ private val SUBCATEGORY_PARENTS = mapOf(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Force light status-bar icons — the brand header is always near-black.
+        enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         setContent {
             MyApplicationTheme {
                 AppScreen()
             }
         }
+    }
+}
+
+// Premium black & orange brand header: logo at left, name + motto to its right,
+// on a near-black surface with a thin orange accent line beneath.
+@Composable
+private fun BrandHeader() {
+    Column {
+        Surface(color = HeaderBlack, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.teeithigher_logo),
+                    contentDescription = "TeeItHigher logo",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.size(48.dp)
+                )
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text(
+                        text = stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = HeaderOnDark
+                    )
+                    Text(
+                        text = stringResource(R.string.app_motto).uppercase(),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Medium,
+                        letterSpacing = 2.sp,
+                        color = BrandOrange
+                    )
+                }
+            }
+        }
+        HorizontalDivider(thickness = 2.dp, color = BrandOrange)
     }
 }
 
@@ -102,27 +152,7 @@ fun AppScreen(viewModel: MainViewModel = viewModel()) {
     }
 
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = stringResource(R.string.app_name),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = stringResource(R.string.app_motto),
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            )
-        },
+        topBar = { BrandHeader() },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         modifier = Modifier.fillMaxSize()
     ) { innerPadding ->
