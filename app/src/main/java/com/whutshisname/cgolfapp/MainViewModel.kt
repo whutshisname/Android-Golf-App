@@ -5,6 +5,7 @@ import android.webkit.WebView
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.whutshisname.cgolfapp.data.PreferencesRepository
+import com.whutshisname.cgolfapp.model.CatalogOverride
 import com.whutshisname.cgolfapp.model.ClubType
 import com.whutshisname.cgolfapp.model.VariantRow
 import com.whutshisname.cgolfapp.model.WatchSet
@@ -15,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -59,6 +61,8 @@ data class UiState(
     val isLoading: Boolean = false,
     val fetchProgress: String = "",
     val clubTypes: List<ClubType> = emptyList(),
+    val catalogOverride: CatalogOverride = CatalogOverride(),
+    val hiddenClubs: List<ClubType> = emptyList(),
     val selectedKeys: Set<String> = emptySet(),
     val fetchedResults: List<FetchedResult> = emptyList(),
     val variantRows: List<VariantRow> = emptyList(),
@@ -83,9 +87,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var pendingContinuation: CancellableContinuation<String>? = null
     private val prefsRepo by lazy { PreferencesRepository(getApplication()) }
 
+    // Bundled catalog from assets, kept separate from the effective catalog so the
+    // admin override (hidden/added clubs) can be layered on top without losing the
+    // shipped source of truth.
+    private val bundledClubs = MutableStateFlow<List<ClubType>>(emptyList())
+
     init {
         loadClubTypes()
         collectPreferences()
+        collectCatalog()
     }
 
     // ── Persistence (DataStore) ───────────────────────────────────────────────
@@ -101,6 +111,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.update { it.copy(watchSets = sets) }
             }
         }
+    }
+
+    // ── Catalog (effective = bundled − hidden + added) ──────────────────────────
+
+    private fun collectCatalog() {
+        viewModelScope.launch {
+            combine(bundledClubs, prefsRepo.catalogOverride) { bundled, override ->
+                bundled to override
+            }.collect { (bundled, override) ->
+                // Dedupe by selectionKey (pid|cgid): an admin-added club can match a
+                // bundled one (e.g. the same club later shipped in club_types.json).
+                // Without this, duplicate keys crash the Select LazyColumn. Bundled
+                // entries are listed first, so they win on collision.
+                val effective = (bundled.filterNot { it.pid in override.hiddenPids } +
+                                override.addedClubs)
+                                .distinctBy { it.selectionKey }
+                val hidden = bundled.filter { it.pid in override.hiddenPids }
+                _uiState.update {
+                    it.copy(
+                        clubTypes = effective,
+                        catalogOverride = override,
+                        hiddenClubs = hidden
+                    )
+                }
+            }
+        }
+    }
+
+    fun addClub(club: ClubType) {
+        viewModelScope.launch { prefsRepo.addClub(club) }
+    }
+
+    fun hideClub(pid: String) {
+        viewModelScope.launch { prefsRepo.hideClub(pid) }
+    }
+
+    fun restoreClub(pid: String) {
+        viewModelScope.launch { prefsRepo.restoreClub(pid) }
     }
 
     // ── Watch Sets ────────────────────────────────────────────────────────────
@@ -414,7 +462,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             ?: obj.getString("cgid")
                     )
                 }
-                _uiState.update { it.copy(clubTypes = clubs) }
+                bundledClubs.value = clubs
             } catch (_: Exception) { }
         }
     }

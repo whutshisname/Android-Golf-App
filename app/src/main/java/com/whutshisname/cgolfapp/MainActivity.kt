@@ -9,7 +9,9 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -60,6 +62,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.whutshisname.cgolfapp.ui.theme.BrandOrange
 import com.whutshisname.cgolfapp.ui.theme.HeaderBlack
 import com.whutshisname.cgolfapp.ui.theme.HeaderOnDark
+import com.whutshisname.cgolfapp.ui.AdminCatalogScreen
 import com.whutshisname.cgolfapp.ui.SaveWatchSetDialog
 import com.whutshisname.cgolfapp.ui.WatchSetsBar
 import com.whutshisname.cgolfapp.ui.clubCategorySection
@@ -91,13 +94,15 @@ class MainActivity : ComponentActivity() {
 
 // Premium black & orange brand header: logo at left, name + motto to its right,
 // on a near-black surface with a thin orange accent line beneath.
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BrandHeader() {
+private fun BrandHeader(onLongPress: () -> Unit) {
     Column {
         Surface(color = HeaderBlack, modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .combinedClickable(onClick = {}, onLongClick = onLongPress)
                     .statusBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -138,6 +143,7 @@ fun AppScreen(viewModel: MainViewModel = viewModel()) {
     val pagerState = rememberPagerState(pageCount = { 2 })
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    var showAdmin by remember { mutableStateOf(false) }
 
     // Auto-switch to Results tab when fetch completes
     LaunchedEffect(uiState.variantRows.size) {
@@ -155,12 +161,15 @@ fun AppScreen(viewModel: MainViewModel = viewModel()) {
     // On the Results tab, Back returns to Select (previous workflow step) instead
     // of exiting. On Select the handler is disabled, so Back behaves normally.
     // Switching pages preserves all Select state (selection, expansion, Watch Sets).
-    BackHandler(enabled = pagerState.currentPage == 1) {
+    BackHandler(enabled = pagerState.currentPage == 1 && !showAdmin) {
         scope.launch { pagerState.animateScrollToPage(0) }
     }
 
+    // Admin overlay takes precedence for Back.
+    BackHandler(enabled = showAdmin) { showAdmin = false }
+
     Scaffold(
-        topBar = { BrandHeader() },
+        topBar = { BrandHeader(onLongPress = { showAdmin = true }) },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         modifier = Modifier.fillMaxSize()
     ) { innerPadding ->
@@ -213,29 +222,40 @@ fun AppScreen(viewModel: MainViewModel = viewModel()) {
                 }
             }
 
-            PrimaryTabRow(selectedTabIndex = pagerState.currentPage) {
-                Tab(
-                    selected = pagerState.currentPage == 0,
-                    onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                    text = { Text("Select") }
+            if (showAdmin) {
+                AdminCatalogScreen(
+                    effectiveClubs = uiState.clubTypes,
+                    hiddenClubs = uiState.hiddenClubs,
+                    onAddClub = viewModel::addClub,
+                    onHideClub = viewModel::hideClub,
+                    onRestoreClub = viewModel::restoreClub,
+                    onClose = { showAdmin = false }
                 )
-                Tab(
-                    selected = pagerState.currentPage == 1,
-                    onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
-                    text = {
-                        val count = uiState.variantRows.size
-                        Text(if (count > 0) "Results ($count)" else "Results")
-                    }
-                )
-            }
+            } else {
+                PrimaryTabRow(selectedTabIndex = pagerState.currentPage) {
+                    Tab(
+                        selected = pagerState.currentPage == 0,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                        text = { Text("Select") }
+                    )
+                    Tab(
+                        selected = pagerState.currentPage == 1,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                        text = {
+                            val count = uiState.variantRows.size
+                            Text(if (count > 0) "Results ($count)" else "Results")
+                        }
+                    )
+                }
 
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                when (page) {
-                    0 -> SelectTab(uiState, viewModel)
-                    1 -> ResultsScreen(uiState, viewModel)
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
+                    when (page) {
+                        0 -> SelectTab(uiState, viewModel)
+                        1 -> ResultsScreen(uiState, viewModel)
+                    }
                 }
             }
         }

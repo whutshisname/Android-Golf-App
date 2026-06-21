@@ -164,16 +164,29 @@ fun ResultsScreen(uiState: UiState, viewModel: MainViewModel) {
         }
 
         // ── Filter dropdowns ─────────────────────────────────────────────────
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item { FilterDropdown("Club/Set",   clubSetOpts, filters.clubSet)   { viewModel.setFilter("clubSet",   it) } }
-            item { FilterDropdown("Club",       clubOpts,    filters.club)      { viewModel.setFilter("club",      it) } }
-            item { FilterDropdown("Loft",       loftOpts,    filters.loft)      { viewModel.setFilter("loft",      it) } }
-            item { FilterDropdown("Shaft Type", shaftOpts,   filters.shaftType) { viewModel.setFilter("shaftType", it) } }
-            item { FilterDropdown("Flex",       flexOpts,    filters.shaftFlex) { viewModel.setFilter("shaftFlex", it) } }
+        // Only show a filter that offers a meaningful choice. Each `*Opts` list
+        // already excludes blank/duplicate values, and "All" is added separately
+        // inside FilterDropdown, so the rule is simply: more than one real value.
+        // Hidden filters keep their state (it lives in the ViewModel) — they just
+        // don't render. The whole row is omitted when nothing is worth showing,
+        // so the layout reflows with no empty gap.
+        val showClubSet = clubSetOpts.size > 1
+        val showClub    = clubOpts.size > 1
+        val showLoft    = loftOpts.size > 1
+        val showShaft   = shaftOpts.size > 1
+        val showFlex    = flexOpts.size > 1
+        if (showClubSet || showClub || showLoft || showShaft || showFlex) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (showClubSet) item { FilterDropdown("Club/Set",   clubSetOpts, filters.clubSet)   { viewModel.setFilter("clubSet",   it) } }
+                if (showClub)    item { FilterDropdown("Club",       clubOpts,    filters.club)      { viewModel.setFilter("club",      it) } }
+                if (showLoft)    item { FilterDropdown("Loft",       loftOpts,    filters.loft)      { viewModel.setFilter("loft",      it) } }
+                if (showShaft)   item { FilterDropdown("Shaft Type", shaftOpts,   filters.shaftType) { viewModel.setFilter("shaftType", it) } }
+                if (showFlex)    item { FilterDropdown("Flex",       flexOpts,    filters.shaftFlex) { viewModel.setFilter("shaftFlex", it) } }
+            }
         }
 
         // ── Active filter chips (dismissible individually) ────────────────────
